@@ -1,0 +1,237 @@
+/* ═══════════════════════════════════════════════════════════
+   Matrix AI Assistant — Global Dark Theme
+   ═══════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background: #0D0D1A;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #FAFAFA;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #161625; }
+::-webkit-scrollbar-thumb { background: #2D3436; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #636E72; }
+
+/* ── Sidebar nav links ── */
+.sidebar-nav-link {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: #FAFAFA;
+    font-size: 0.9rem;
+    transition: background 0.2s, opacity 0.2s;
+    margin-bottom: 4px;
+    opacity: 0.7;
+}
+
+.sidebar-nav-link:hover {
+    opacity: 1;
+    background: rgba(108, 92, 231, 0.3);
+}
+
+/* ── Bootstrap overrides for dark theme ── */
+.form-control,
+.form-select {
+    background-color: #0D0D1A !important;
+    border-color: #2D3436 !important;
+    color: #FAFAFA !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: #6C5CE7 !important;
+    box-shadow: 0 0 0 0.2rem rgba(108, 92, 231, 0.25) !important;
+}
+
+.form-control::placeholder {
+    color: #636E72 !important;
+}
+
+/* ── Input date picker dark ── */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+}
+
+/* ── Conversation list items ── */
+.conversation-item:hover {
+    background: rgba(108, 92, 231, 0.2) !important;
+}
+
+/* ── Dash markdown inside chat ── */
+.chat-messages-container p {
+    margin-bottom: 0.5em;
+}
+
+/* ── Button group active state ── */
+.btn-group .btn.active {
+    background: #6C5CE7 !important;
+    border-color: #6C5CE7 !important;
+    color: #fff !important;
+}
+
+/* ── Card hover effect ── */
+.card-hover:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s;
+}
+
+/* ── Loading spinner ── */
+._dash-loading {
+    background: #0D0D1A;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    #sidebar {
+        display: none !important;
+    }
+    #page-content {
+        margin-left: 0 !important;
+    }
+}
+
+/* ── Kanban Board ── */
+.kanban-board {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    min-height: 400px;
+}
+
+.kanban-column {
+    flex: 1;
+    min-width: 280px;
+    background: #161625;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+.kanban-column-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #2D3436;
+}
+
+.kanban-column-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin: 0;
+}
+
+.kanban-count {
+    background: #2D3436;
+    color: #B2BEC3;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.kanban-card {
+    background: #1E1E2E;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-left: 3px solid #636E72;
+    transition: transform 0.15s, box-shadow 0.15s;
+    cursor: default;
+}
+
+.kanban-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.kanban-card-key {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #636E72;
+    margin-bottom: 4px;
+}
+
+.kanban-card-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #FAFAFA;
+    margin-bottom: 8px;
+    line-height: 1.3;
+}
+
+.kanban-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.kanban-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+/* ── Employee Directory ── */
+.employee-card {
+    background: #1E1E2E;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    transition: transform 0.15s, box-shadow 0.15s;
+    border: 1px solid #2D3436;
+}
+
+.employee-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+    border-color: #6C5CE7;
+}
+
+.employee-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 12px;
+}
+
+.employee-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+    border: 2px solid #1E1E2E;
+}
+
+/* ── Bootstrap Icons CDN loaded via app.py index_string ── */
