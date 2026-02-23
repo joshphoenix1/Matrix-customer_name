@@ -3,17 +3,17 @@
 # Matrix AI Assistant — Bootstrap for Fresh EC2
 # ══════════════════════════════════════════════════════════════
 #
-# ONE-LINER (run on a fresh Ubuntu EC2):
+# ONE-LINER (private repo — pass GITHUB_PAT):
 #
-#   curl -sL https://raw.githubusercontent.com/joshphoenix1/Matrix-customer_name/master/bootstrap.sh | bash
+#   curl -sL -H "Authorization: token YOUR_PAT" \
+#     https://raw.githubusercontent.com/joshphoenix1/Matrix-customer_name/master/bootstrap.sh | \
+#     GITHUB_PAT="YOUR_PAT" bash
 #
-# Then edit deploy.conf and run deploy.sh:
+# FULLY AUTOMATED:
 #
-#   cd ~/matrix-ai && nano deploy.conf && ./deploy.sh
-#
-# OR fully automated with env vars:
-#
-#   curl -sL https://raw.githubusercontent.com/joshphoenix1/Matrix-customer_name/master/bootstrap.sh | \
+#   curl -sL -H "Authorization: token YOUR_PAT" \
+#     https://raw.githubusercontent.com/joshphoenix1/Matrix-customer_name/master/bootstrap.sh | \
+#     GITHUB_PAT="YOUR_PAT" \
 #     ANTHROPIC_API_KEY="sk-ant-..." \
 #     APP_PORT=5003 \
 #     IMAP_EMAIL="you@gmail.com" \
@@ -25,7 +25,16 @@
 set -euo pipefail
 
 INSTALL_DIR="${INSTALL_DIR:-$HOME/matrix-ai}"
-REPO_URL="https://github.com/joshphoenix1/Matrix-customer_name.git"
+GITHUB_PAT="${GITHUB_PAT:-}"
+GITHUB_ORG="${GITHUB_ORG:-joshphoenix1}"
+GITHUB_REPO="${GITHUB_REPO:-Matrix-customer_name}"
+
+# Build repo URL (with PAT for private repos)
+if [ -n "$GITHUB_PAT" ]; then
+    REPO_URL="https://${GITHUB_PAT}@github.com/${GITHUB_ORG}/${GITHUB_REPO}.git"
+else
+    REPO_URL="https://github.com/${GITHUB_ORG}/${GITHUB_REPO}.git"
+fi
 
 echo ""
 echo "  Matrix AI Assistant — Bootstrap"
@@ -42,7 +51,7 @@ fi
 if [ -d "$INSTALL_DIR" ]; then
     echo "Updating existing install at $INSTALL_DIR..."
     cd "$INSTALL_DIR"
-    git pull --ff-only origin master
+    git pull --ff-only origin master 2>/dev/null || git pull origin master
 else
     echo "Cloning template into $INSTALL_DIR..."
     git clone "$REPO_URL" "$INSTALL_DIR"
