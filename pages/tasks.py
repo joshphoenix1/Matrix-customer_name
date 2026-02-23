@@ -1,5 +1,5 @@
 """
-Tasks page — task board with create, track, and accountability features.
+Tasks page — Kanban board with columns for To Do, In Progress, Done.
 """
 
 import dash
@@ -18,87 +18,192 @@ PRIORITY_COLORS = {
     "low": COLORS["info"],
 }
 
-STATUS_LABELS = {
-    "pending": ("Pending", COLORS["text_muted"]),
-    "in_progress": ("In Progress", COLORS["info"]),
-    "completed": ("Done", COLORS["success"]),
-    "cancelled": ("Cancelled", COLORS["danger"]),
+COLUMNS = [
+    ("pending", "To Do", COLORS["text_muted"]),
+    ("in_progress", "In Progress", COLORS["info"]),
+    ("completed", "Done", COLORS["success"]),
+]
+
+COLUMN_STYLE = {
+    "flex": "1",
+    "minWidth": "280px",
+    "background": COLORS["body_bg"],
+    "borderRadius": "12px",
+    "padding": "16px",
+    "display": "flex",
+    "flexDirection": "column",
+    "maxHeight": "calc(100vh - 240px)",
+    "overflowY": "auto",
+}
+
+CARD_STYLE = {
+    "background": COLORS["card_bg"],
+    "borderRadius": "10px",
+    "padding": "14px 16px",
+    "marginBottom": "10px",
+    "cursor": "default",
+    "transition": "box-shadow 0.2s",
 }
 
 
-def _task_card(task):
-    """Render a single task card inline."""
-    priority_color = PRIORITY_COLORS.get(task["priority"], COLORS["text_muted"])
-    status_label, status_color = STATUS_LABELS.get(task["status"], ("Unknown", COLORS["text_muted"]))
+def _board_card(task):
+    """Render a compact Kanban card."""
+    priority = task["priority"]
+    priority_color = PRIORITY_COLORS.get(priority, COLORS["text_muted"])
+    status = task["status"]
 
     due_text = ""
+    overdue = False
     if task.get("due_date"):
-        due_text = f"Due: {task['due_date']}"
+        due_text = task["due_date"]
+        if task["due_date"] < date.today().isoformat() and status != "completed":
+            overdue = True
+
+    # Move buttons
+    move_btns = []
+    if status == "pending":
+        move_btns.append(
+            html.Button(
+                html.I(className="bi bi-arrow-right"),
+                id={"type": "task-move", "index": task["id"], "action": "start"},
+                title="Move to In Progress",
+                style={
+                    "background": "transparent",
+                    "border": "none",
+                    "color": COLORS["info"],
+                    "cursor": "pointer",
+                    "fontSize": "0.9rem",
+                    "padding": "2px 6px",
+                },
+            )
+        )
+        move_btns.append(
+            html.Button(
+                html.I(className="bi bi-check-lg"),
+                id={"type": "task-move", "index": task["id"], "action": "complete"},
+                title="Mark Done",
+                style={
+                    "background": "transparent",
+                    "border": "none",
+                    "color": COLORS["success"],
+                    "cursor": "pointer",
+                    "fontSize": "0.9rem",
+                    "padding": "2px 6px",
+                },
+            )
+        )
+    elif status == "in_progress":
+        move_btns.append(
+            html.Button(
+                html.I(className="bi bi-arrow-left"),
+                id={"type": "task-move", "index": task["id"], "action": "reopen"},
+                title="Move back to To Do",
+                style={
+                    "background": "transparent",
+                    "border": "none",
+                    "color": COLORS["text_muted"],
+                    "cursor": "pointer",
+                    "fontSize": "0.9rem",
+                    "padding": "2px 6px",
+                },
+            )
+        )
+        move_btns.append(
+            html.Button(
+                html.I(className="bi bi-check-lg"),
+                id={"type": "task-move", "index": task["id"], "action": "complete"},
+                title="Mark Done",
+                style={
+                    "background": "transparent",
+                    "border": "none",
+                    "color": COLORS["success"],
+                    "cursor": "pointer",
+                    "fontSize": "0.9rem",
+                    "padding": "2px 6px",
+                },
+            )
+        )
+    elif status == "completed":
+        move_btns.append(
+            html.Button(
+                html.I(className="bi bi-arrow-counterclockwise"),
+                id={"type": "task-move", "index": task["id"], "action": "reopen"},
+                title="Reopen",
+                style={
+                    "background": "transparent",
+                    "border": "none",
+                    "color": COLORS["text_muted"],
+                    "cursor": "pointer",
+                    "fontSize": "0.9rem",
+                    "padding": "2px 6px",
+                },
+            )
+        )
 
     return html.Div(
         style={
-            "background": COLORS["card_bg"],
-            "borderRadius": "12px",
-            "padding": "16px 20px",
-            "marginBottom": "8px",
+            **CARD_STYLE,
             "borderLeft": f"4px solid {priority_color}",
+            "opacity": "0.6" if status == "completed" else "1",
         },
         children=[
+            # Title row
             html.Div(
-                style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "8px"},
+                style={"display": "flex", "justifyContent": "space-between", "alignItems": "flex-start", "marginBottom": "8px"},
                 children=[
-                    html.H4(
+                    html.Span(
                         task["title"],
                         style={
                             "color": COLORS["text_primary"],
-                            "margin": 0,
-                            "fontSize": "0.95rem",
+                            "fontSize": "0.88rem",
                             "fontWeight": "600",
-                            "textDecoration": "line-through" if task["status"] == "completed" else "none",
+                            "lineHeight": "1.3",
+                            "flex": "1",
+                            "textDecoration": "line-through" if status == "completed" else "none",
                         },
                     ),
                     html.Div(
-                        style={"display": "flex", "gap": "8px", "alignItems": "center"},
-                        children=[
-                            html.Span(
-                                task["priority"].upper(),
-                                style={
-                                    "background": priority_color,
-                                    "color": "#fff",
-                                    "padding": "2px 8px",
-                                    "borderRadius": "4px",
-                                    "fontSize": "0.7rem",
-                                    "fontWeight": "600",
-                                },
-                            ),
-                            html.Span(
-                                status_label,
-                                style={
-                                    "border": f"1px solid {status_color}",
-                                    "color": status_color,
-                                    "padding": "2px 8px",
-                                    "borderRadius": "4px",
-                                    "fontSize": "0.7rem",
-                                    "fontWeight": "600",
-                                },
-                            ),
-                        ],
+                        style={"display": "flex", "gap": "2px", "marginLeft": "8px", "flexShrink": "0"},
+                        children=move_btns,
                     ),
                 ],
             ),
+            # Description
             html.P(
-                task.get("description", ""),
+                task.get("description", "")[:120] + ("..." if len(task.get("description", "")) > 120 else ""),
                 style={
                     "color": COLORS["text_secondary"],
-                    "fontSize": "0.85rem",
-                    "margin": "0 0 6px 0",
+                    "fontSize": "0.78rem",
+                    "margin": "0 0 8px 0",
                     "lineHeight": "1.4",
                 },
             ) if task.get("description") else None,
-            html.Span(
-                due_text,
-                style={"color": COLORS["text_muted"], "fontSize": "0.8rem"},
-            ) if due_text else None,
+            # Footer: priority badge + due date
+            html.Div(
+                style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"},
+                children=[
+                    html.Span(
+                        priority.upper(),
+                        style={
+                            "background": priority_color,
+                            "color": "#fff",
+                            "padding": "1px 7px",
+                            "borderRadius": "3px",
+                            "fontSize": "0.6rem",
+                            "fontWeight": "700",
+                            "letterSpacing": "0.5px",
+                        },
+                    ),
+                    html.Span(
+                        due_text,
+                        style={
+                            "color": COLORS["danger"] if overdue else COLORS["text_muted"],
+                            "fontSize": "0.72rem",
+                            "fontWeight": "600" if overdue else "400",
+                        },
+                    ) if due_text else None,
+                ],
+            ),
         ],
     )
 
@@ -107,13 +212,15 @@ def _task_card(task):
 
 layout = html.Div(
     children=[
+        dcc.Store(id="board-refresh", data=0),
+        # Header
         html.Div(
-            style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "24px"},
+            style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "20px"},
             children=[
                 html.Div(
                     children=[
                         html.H2("Task Board", style={"color": COLORS["text_primary"], "margin": 0}),
-                        html.P("Track priorities and accountability.", style={"color": COLORS["text_muted"], "fontSize": "0.9rem", "margin": "4px 0 0 0"}),
+                        html.P("Drag-style Kanban board. Move tasks across columns.", style={"color": COLORS["text_muted"], "fontSize": "0.9rem", "margin": "4px 0 0 0"}),
                     ]
                 ),
                 dbc.Button(
@@ -124,22 +231,6 @@ layout = html.Div(
                 ),
             ],
         ),
-        # Filter bar
-        html.Div(
-            style={"display": "flex", "gap": "8px", "marginBottom": "24px", "flexWrap": "wrap"},
-            children=[
-                dbc.ButtonGroup(
-                    [
-                        dbc.Button("All", id="filter-all", outline=True, color="light", size="sm", active=True),
-                        dbc.Button("Today", id="filter-today", outline=True, color="light", size="sm"),
-                        dbc.Button("Overdue", id="filter-overdue", outline=True, color="danger", size="sm"),
-                        dbc.Button("Critical", id="filter-critical", outline=True, color="warning", size="sm"),
-                        dbc.Button("Completed", id="filter-completed", outline=True, color="success", size="sm"),
-                    ]
-                ),
-            ],
-        ),
-        dcc.Store(id="task-filter", data="all"),
         # Task create form (collapsible)
         dbc.Collapse(
             id="task-form-collapse",
@@ -150,7 +241,7 @@ layout = html.Div(
                         "background": COLORS["card_bg"],
                         "borderRadius": "12px",
                         "padding": "24px",
-                        "marginBottom": "24px",
+                        "marginBottom": "20px",
                         "borderLeft": f"4px solid {COLORS['accent']}",
                     },
                     children=[
@@ -214,8 +305,8 @@ layout = html.Div(
                 ),
             ],
         ),
-        # Task list
-        html.Div(id="task-list"),
+        # Kanban board
+        html.Div(id="kanban-board"),
     ]
 )
 
@@ -238,35 +329,14 @@ def toggle_form(open_clicks, cancel_clicks, create_clicks, is_open):
 
 
 @callback(
-    Output("task-filter", "data"),
-    Input("filter-all", "n_clicks"),
-    Input("filter-today", "n_clicks"),
-    Input("filter-overdue", "n_clicks"),
-    Input("filter-critical", "n_clicks"),
-    Input("filter-completed", "n_clicks"),
-    prevent_initial_call=True,
-)
-def set_filter(*_):
-    trigger = ctx.triggered_id
-    filter_map = {
-        "filter-all": "all",
-        "filter-today": "today",
-        "filter-overdue": "overdue",
-        "filter-critical": "critical",
-        "filter-completed": "completed",
-    }
-    return filter_map.get(trigger, "all")
-
-
-@callback(
-    Output("task-list", "children"),
-    Input("task-filter", "data"),
+    Output("kanban-board", "children"),
+    Input("board-refresh", "data"),
     Input("btn-create-task", "n_clicks"),
-    Input({"type": "task-status-btn", "index": ALL, "action": ALL}, "n_clicks"),
+    Input({"type": "task-move", "index": ALL, "action": ALL}, "n_clicks"),
 )
-def render_tasks(filter_val, create_clicks, status_clicks):
-    # Handle status change
-    if ctx.triggered_id and isinstance(ctx.triggered_id, dict) and ctx.triggered_id.get("type") == "task-status-btn":
+def render_board(_, create_clicks, move_clicks):
+    # Handle move action
+    if ctx.triggered_id and isinstance(ctx.triggered_id, dict) and ctx.triggered_id.get("type") == "task-move":
         task_id = ctx.triggered_id["index"]
         action = ctx.triggered_id["action"]
         status_map = {
@@ -278,54 +348,89 @@ def render_tasks(filter_val, create_clicks, status_clicks):
         if action in status_map:
             db.update_task(task_id, status=status_map[action])
 
-    # Apply filter
-    if filter_val == "today":
-        tasks = db.get_tasks_due_today()
-    elif filter_val == "overdue":
-        tasks = db.get_overdue_tasks()
-    elif filter_val == "critical":
-        tasks = db.get_tasks(priority="critical")
-    elif filter_val == "completed":
-        tasks = db.get_tasks(status="completed")
-    else:
-        tasks = db.get_tasks()
+    all_tasks = db.get_tasks()
 
-    if not tasks:
-        return html.Div(
-            style={"textAlign": "center", "padding": "48px", "background": COLORS["card_bg"], "borderRadius": "12px"},
-            children=[
-                html.P("No tasks found.", style={"color": COLORS["text_muted"], "fontSize": "1rem", "marginBottom": "8px"}),
-                html.P("Click 'Add Task' to create your first task.", style={"color": COLORS["text_muted"], "fontSize": "0.85rem"}),
-            ],
-        )
+    columns = []
+    for status_key, label, color in COLUMNS:
+        col_tasks = [t for t in all_tasks if t["status"] == status_key]
+        count = len(col_tasks)
 
-    items = []
-    for t in tasks:
-        # Build action buttons based on status
-        actions = []
-        if t["status"] == "pending":
-            actions.append(dbc.Button("Start", id={"type": "task-status-btn", "index": t["id"], "action": "start"}, size="sm", outline=True, color="info", style={"fontSize": "0.75rem"}))
-            actions.append(dbc.Button("Done", id={"type": "task-status-btn", "index": t["id"], "action": "complete"}, size="sm", outline=True, color="success", style={"fontSize": "0.75rem"}))
-        elif t["status"] == "in_progress":
-            actions.append(dbc.Button("Done", id={"type": "task-status-btn", "index": t["id"], "action": "complete"}, size="sm", outline=True, color="success", style={"fontSize": "0.75rem"}))
-            actions.append(dbc.Button("Cancel", id={"type": "task-status-btn", "index": t["id"], "action": "cancel"}, size="sm", outline=True, color="danger", style={"fontSize": "0.75rem"}))
-        elif t["status"] in ("completed", "cancelled"):
-            actions.append(dbc.Button("Reopen", id={"type": "task-status-btn", "index": t["id"], "action": "reopen"}, size="sm", outline=True, color="secondary", style={"fontSize": "0.75rem"}))
+        # Sort: critical first, then by due date
+        col_tasks.sort(key=lambda t: (
+            {"critical": 0, "high": 1, "medium": 2, "low": 3}.get(t["priority"], 9),
+            t.get("due_date") or "9999-99-99",
+        ))
 
-        card = _task_card(t)
-        items.append(
+        cards = [_board_card(t) for t in col_tasks]
+
+        if not cards:
+            cards = [
+                html.Div(
+                    style={
+                        "textAlign": "center",
+                        "padding": "32px 16px",
+                        "color": COLORS["text_muted"],
+                        "fontSize": "0.8rem",
+                    },
+                    children="No tasks",
+                )
+            ]
+
+        columns.append(
             html.Div(
-                style={"position": "relative"},
+                style=COLUMN_STYLE,
                 children=[
-                    card,
+                    # Column header
                     html.Div(
-                        style={"position": "absolute", "bottom": "12px", "right": "16px", "display": "flex", "gap": "4px"},
-                        children=actions,
-                    ) if actions else None,
+                        style={
+                            "display": "flex",
+                            "justifyContent": "space-between",
+                            "alignItems": "center",
+                            "marginBottom": "14px",
+                            "paddingBottom": "10px",
+                            "borderBottom": f"2px solid {color}",
+                        },
+                        children=[
+                            html.Span(
+                                label,
+                                style={
+                                    "color": COLORS["text_primary"],
+                                    "fontSize": "0.9rem",
+                                    "fontWeight": "700",
+                                    "letterSpacing": "0.5px",
+                                },
+                            ),
+                            html.Span(
+                                str(count),
+                                style={
+                                    "background": color,
+                                    "color": "#fff",
+                                    "width": "24px",
+                                    "height": "24px",
+                                    "borderRadius": "50%",
+                                    "display": "flex",
+                                    "alignItems": "center",
+                                    "justifyContent": "center",
+                                    "fontSize": "0.7rem",
+                                    "fontWeight": "700",
+                                },
+                            ),
+                        ],
+                    ),
+                    # Cards
+                    html.Div(cards),
                 ],
             )
         )
-    return html.Div(items)
+
+    return html.Div(
+        style={
+            "display": "flex",
+            "gap": "16px",
+            "alignItems": "flex-start",
+        },
+        children=columns,
+    )
 
 
 @callback(
