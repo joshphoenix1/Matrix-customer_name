@@ -84,6 +84,28 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS invoices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    amount REAL NOT NULL DEFAULT 0,
+    due_date TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'overdue')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    paid_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS revenue_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    amount REAL NOT NULL DEFAULT 0,
+    entry_type TEXT NOT NULL DEFAULT 'one-time' CHECK (entry_type IN ('recurring', 'one-time')),
+    period TEXT DEFAULT '',
+    entry_date TEXT NOT NULL DEFAULT (date('now')),
+    notes TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -398,3 +420,87 @@ def get_setting(key, default=None):
             "SELECT value FROM settings WHERE key = ?", (key,)
         ).fetchone()
         return dict(row)["value"] if row else default
+
+
+# ── Invoices ──
+
+def create_invoice(client, amount, due_date=None, description="", status="pending"):
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT INTO invoices (client, amount, due_date, description, status) VALUES (?, ?, ?, ?, ?)",
+            (client, amount, due_date, description, status),
+        )
+        return cur.lastrowid
+
+
+def get_invoices(status=None):
+    with get_db() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM invoices WHERE status = ? ORDER BY due_date ASC, created_at DESC",
+                (status,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM invoices ORDER BY CASE status WHEN 'overdue' THEN 0 WHEN 'pending' THEN 1 WHEN 'paid' THEN 2 END, due_date ASC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def update_invoice(invoice_id, **kwargs):
+    with get_db() as conn:
+        allowed = {"client", "amount", "due_date", "description", "status"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if "status" in updates and updates["status"] == "paid":
+            updates["paid_at"] = datetime.now().isoformat()
+        if not updates:
+            return
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [invoice_id]
+        conn.execute(f"UPDATE invoices SET {set_clause} WHERE id = ?", values)
+
+
+def delete_invoice(invoice_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM invoices WHERE id = ?", (invoice_id,))
+
+
+def get_invoices_summary():
+    invoices = get_invoices()
+    outstanding = [i for i in invoices if i["status"] != "paid"]
+    total = sum(i["amount"] for i in outstanding)
+    overdue = sum(i["amount"] for i in outstanding if i["status"] == "overdue")
+    return {"total_outstanding": total, "total_overdue": overdue, "count": len(outstanding)}
+
+
+# ── Revenue Entries ──
+
+def create_revenue_entry(source, amount, entry_type="one-time", period="", entry_date=None, notes=""):
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT INTO revenue_entries (source, amount, entry_type, period, entry_date, notes) VALUES (?, ?, ?, ?, ?, ?)",
+            (source, amount, entry_type, period, entry_date or date.today().isoformat(), notes),
+        )
+        return cur.lastrowid
+
+
+def get_revenue_entries(limit=50):
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM revenue_entries ORDER BY entry_date DESC, created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def delete_revenue_entry(entry_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM revenue_entries WHERE id = ?", (entry_id,))
+
+
+def get_revenue_summary():
+    entries = get_revenue_entries(limit=1000)
+    total = sum(e["amount"] for e in entries)
+    recurring = [e for e in entries if e["entry_type"] == "recurring"]
+    mrr = sum(e["amount"] for e in recurring)
+    return {"total_revenue": total, "mrr": mrr, "entry_count": len(entries)}
