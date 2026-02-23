@@ -44,9 +44,11 @@ def _build_system_prompt():
 
 
 def _get_client():
-    if not ANTHROPIC_API_KEY:
+    # Check DB override first, then fall back to config/.env
+    api_key = db.get_setting("anthropic_api_key") or ANTHROPIC_API_KEY
+    if not api_key:
         return None
-    return Anthropic(api_key=ANTHROPIC_API_KEY)
+    return Anthropic(api_key=api_key)
 
 
 def chat(user_message, conversation_id):
