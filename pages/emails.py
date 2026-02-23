@@ -168,7 +168,7 @@ def scan_inbox(n_clicks):
             children=[
                 html.I(className="bi bi-inbox", style={"color": COLORS["info"], "marginRight": "8px"}),
                 html.Span(
-                    "No new unread emails found.",
+                    "No new emails to process — all inbox emails have already been scanned.",
                     style={"color": COLORS["text_secondary"], "fontSize": "0.9rem"},
                 ),
             ],

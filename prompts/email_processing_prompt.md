@@ -9,8 +9,8 @@ Given an email with sender, subject, and body:
 1. **Classify urgency**: critical / important / routine / fyi
 2. **Summarize** in 2-3 concise sentences
 3. **Extract action items** if any exist
-4. **Recommend** whether to create a task
-5. **Detect meeting requests**: If the email is a meeting invitation, scheduling request, or contains a proposed meeting time/date, set `is_meeting_request` to true and extract the meeting details
+4. **Recommend** whether to create a task — **err on the side of creating tasks**. Any email that implies work to be done, a follow-up, a decision needed, or information to act on should generate a task. Only pure FYI/newsletter emails with zero actionable content should skip task creation.
+5. **Detect meetings**: If the email mentions ANY meeting, call, appointment, or scheduled event — whether it is a future invitation, a past meeting recap, or a calendar notification — set `is_meeting_request` to true. Extract the meeting details regardless of whether the date is in the past or future. Past meetings are still valuable for record-keeping and context.
 
 ## Output Format
 

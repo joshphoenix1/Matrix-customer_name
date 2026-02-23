@@ -94,7 +94,7 @@ def test_imap_connection(server, email_addr, password):
 
 def check_inbox():
     """
-    Connect to IMAP inbox, fetch ALL recent emails (seen or unseen).
+    Connect to IMAP inbox, fetch recent emails (read or unread).
     Deduplicates against already-processed emails in the DB by subject+sender.
     Returns list of {sender, subject, body} dicts for emails not yet processed.
     """
@@ -106,43 +106,54 @@ def check_inbox():
         return []
 
     # Build set of already-processed emails for dedup
-    existing_emails = db.get_emails(limit=200)
+    existing_emails = db.get_emails(limit=500)
     processed_keys = {(e["sender"], e["subject"]) for e in existing_emails}
 
     try:
-        with IMAPClient(server, ssl=True, port=993, timeout=30) as client:
+        with IMAPClient(server, ssl=True, port=993, timeout=60) as client:
             client.login(email_addr, password)
             client.select_folder("INBOX")
 
+            # Fetch ALL emails (read and unread)
             uids = client.search(["ALL"])
             if not uids:
                 return []
 
+            # Limit to most recent 50 to avoid timeout on large inboxes
+            uids = sorted(uids)[-50:]
+
             results = []
-            raw_messages = client.fetch(uids, ["RFC822"])
-
-            for uid, data in raw_messages.items():
-                raw_email = data[b"RFC822"]
-                msg = email.message_from_bytes(raw_email)
-
-                sender = _decode_header_value(msg.get("From", ""))
-                subject = _decode_header_value(msg.get("Subject", "(No Subject)"))
-
-                # Skip if already processed
-                if (sender, subject) in processed_keys:
+            # Fetch in batches of 10 to avoid timeout/memory issues
+            for i in range(0, len(uids), 10):
+                batch = uids[i:i + 10]
+                try:
+                    raw_messages = client.fetch(batch, ["RFC822"])
+                except Exception as e:
+                    print(f"IMAP fetch batch error: {e}")
                     continue
 
-                body = _extract_body(msg)
+                for uid, data in raw_messages.items():
+                    raw_email = data[b"RFC822"]
+                    msg = email.message_from_bytes(raw_email)
 
-                # Truncate very long bodies for AI processing
-                if len(body) > 10000:
-                    body = body[:10000] + "\n\n[... truncated ...]"
+                    sender = _decode_header_value(msg.get("From", ""))
+                    subject = _decode_header_value(msg.get("Subject", "(No Subject)"))
 
-                results.append({
-                    "sender": sender,
-                    "subject": subject,
-                    "body": body,
-                })
+                    # Skip if already processed
+                    if (sender, subject) in processed_keys:
+                        continue
+
+                    body = _extract_body(msg)
+
+                    # Truncate very long bodies for AI processing
+                    if len(body) > 10000:
+                        body = body[:10000] + "\n\n[... truncated ...]"
+
+                    results.append({
+                        "sender": sender,
+                        "subject": subject,
+                        "body": body,
+                    })
 
             return results
 
