@@ -220,7 +220,7 @@ def layout():
                         style={"color": COLORS["text_muted"], "fontSize": "0.85rem", "marginBottom": "16px"},
                     ),
                     _input_field("IMAP Server", "setup-imap-server", "imap.gmail.com", imap_server),
-                    _input_field("Email Address", "setup-imap-email", "you@gmail.com", imap_email),
+                    _input_field("Email Address", "setup-imap-email", "Enter your email address", imap_email),
                     _input_field("App Password", "setup-imap-password", "Your app password", imap_password, input_type="password"),
                     html.Div(id="setup-imap-test-result", style={"marginTop": "8px"}),
                     dbc.Button(

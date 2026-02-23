@@ -51,6 +51,7 @@ layout = html.Div(
     children=[
         dcc.Store(id="emails-filter", data="All"),
         dcc.Store(id="emails-scan-result", data=None),
+        dcc.Store(id="emails-page-load", data=0),
         # Header
         html.Div(
             style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "24px"},
@@ -109,8 +110,9 @@ layout = html.Div(
 @callback(
     Output("emails-connection-status", "children"),
     Input("emails-scan-result", "data"),
+    Input("emails-page-load", "data"),
 )
-def update_connection_status(_):
+def update_connection_status(*_):
     return _connection_status()
 
 
