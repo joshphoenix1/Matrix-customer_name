@@ -79,6 +79,30 @@ CREATE TABLE IF NOT EXISTS documents (
     uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS clients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT DEFAULT '',
+    phone TEXT DEFAULT '',
+    company TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'prospect')),
+    notes TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS deals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    value REAL NOT NULL DEFAULT 0,
+    stage TEXT NOT NULL DEFAULT 'prospect' CHECK (stage IN ('prospect', 'proposal', 'negotiation', 'won', 'lost')),
+    expected_close TEXT,
+    notes TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    closed_at TEXT,
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT,
@@ -509,3 +533,159 @@ def get_revenue_summary():
     recurring = [e for e in entries if e["entry_type"] == "recurring"]
     mrr = sum(e["amount"] for e in recurring)
     return {"total_revenue": total, "mrr": mrr, "entry_count": len(entries)}
+
+
+# ── Clients ──
+
+def create_client(name, email="", phone="", company="", status="active", notes=""):
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT INTO clients (name, email, phone, company, status, notes) VALUES (?, ?, ?, ?, ?, ?)",
+            (name, email, phone, company, status, notes),
+        )
+        return cur.lastrowid
+
+
+def get_clients(status=None):
+    with get_db() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM clients WHERE status = ? ORDER BY name", (status,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM clients ORDER BY name"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_client(client_id):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM clients WHERE id = ?", (client_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def update_client(client_id, **kwargs):
+    with get_db() as conn:
+        allowed = {"name", "email", "phone", "company", "status", "notes"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if not updates:
+            return
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [client_id]
+        conn.execute(f"UPDATE clients SET {set_clause} WHERE id = ?", values)
+
+
+def delete_client(client_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM clients WHERE id = ?", (client_id,))
+
+
+# ── Deals ──
+
+def create_deal(client_id, title, value=0, stage="prospect", expected_close=None, notes=""):
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT INTO deals (client_id, title, value, stage, expected_close, notes) VALUES (?, ?, ?, ?, ?, ?)",
+            (client_id, title, value, stage, expected_close, notes),
+        )
+        return cur.lastrowid
+
+
+def get_deals(stage=None):
+    with get_db() as conn:
+        query = """
+            SELECT d.*, c.name AS client_name
+            FROM deals d
+            JOIN clients c ON d.client_id = c.id
+            WHERE 1=1
+        """
+        params = []
+        if stage:
+            query += " AND d.stage = ?"
+            params.append(stage)
+        query += """
+            ORDER BY
+                CASE d.stage
+                    WHEN 'prospect' THEN 0
+                    WHEN 'proposal' THEN 1
+                    WHEN 'negotiation' THEN 2
+                    WHEN 'won' THEN 3
+                    WHEN 'lost' THEN 4
+                END,
+                d.value DESC
+        """
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_deal(deal_id):
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT d.*, c.name AS client_name
+               FROM deals d JOIN clients c ON d.client_id = c.id
+               WHERE d.id = ?""",
+            (deal_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def update_deal(deal_id, **kwargs):
+    with get_db() as conn:
+        allowed = {"title", "value", "stage", "expected_close", "notes"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if "stage" in updates and updates["stage"] in ("won", "lost"):
+            updates["closed_at"] = datetime.now().isoformat()
+        if not updates:
+            return
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [deal_id]
+        conn.execute(f"UPDATE deals SET {set_clause} WHERE id = ?", values)
+
+
+def delete_deal(deal_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM deals WHERE id = ?", (deal_id,))
+
+
+def get_crm_summary():
+    with get_db() as conn:
+        total_clients = conn.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
+        active_deals = conn.execute(
+            "SELECT COUNT(*) FROM deals WHERE stage NOT IN ('won', 'lost')"
+        ).fetchone()[0]
+        pipeline_value = conn.execute(
+            "SELECT COALESCE(SUM(value), 0) FROM deals WHERE stage NOT IN ('won', 'lost')"
+        ).fetchone()[0]
+        won_value = conn.execute(
+            "SELECT COALESCE(SUM(value), 0) FROM deals WHERE stage = 'won'"
+        ).fetchone()[0]
+        return {
+            "total_clients": total_clients,
+            "active_deals": active_deals,
+            "pipeline_value": pipeline_value,
+            "won_value": won_value,
+        }
+
+
+# ── Calendar Helpers ──
+
+def get_meetings_for_month(year, month):
+    prefix = f"{year}-{month:02d}"
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM meetings WHERE date LIKE ? ORDER BY date ASC, created_at ASC",
+            (f"{prefix}%",),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_meetings_for_date(date_str):
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM meetings WHERE date = ? ORDER BY created_at ASC",
+            (date_str,),
+        ).fetchall()
+        return [dict(r) for r in rows]

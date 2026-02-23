@@ -9,7 +9,7 @@ from datetime import date, datetime
 from config import COLORS
 import db
 
-dash.register_page(__name__, path="/finances", name="Finances", order=7)
+dash.register_page(__name__, path="/finances", name="Finances", order=8)
 
 STATUS_COLORS = {
     "overdue": COLORS["danger"],
