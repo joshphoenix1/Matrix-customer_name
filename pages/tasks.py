@@ -331,10 +331,9 @@ def toggle_form(open_clicks, cancel_clicks, create_clicks, is_open):
 @callback(
     Output("kanban-board", "children"),
     Input("board-refresh", "data"),
-    Input("btn-create-task", "n_clicks"),
     Input({"type": "task-move", "index": ALL, "action": ALL}, "n_clicks"),
 )
-def render_board(_, create_clicks, move_clicks):
+def render_board(_, move_clicks):
     # Handle move action
     if ctx.triggered_id and isinstance(ctx.triggered_id, dict) and ctx.triggered_id.get("type") == "task-move":
         task_id = ctx.triggered_id["index"]
@@ -438,6 +437,7 @@ def render_board(_, create_clicks, move_clicks):
     Output("task-description", "value"),
     Output("task-priority", "value"),
     Output("task-due-date", "value"),
+    Output("board-refresh", "data", allow_duplicate=True),
     Input("btn-create-task", "n_clicks"),
     State("task-title", "value"),
     State("task-description", "value"),
@@ -447,7 +447,7 @@ def render_board(_, create_clicks, move_clicks):
 )
 def create_task(n, title, description, priority, due_date):
     if not n or not title or not title.strip():
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
 
     db.create_task(
         title=title.strip(),
@@ -455,4 +455,4 @@ def create_task(n, title, description, priority, due_date):
         priority=priority or "medium",
         due_date=due_date or None,
     )
-    return "", "", "medium", None
+    return "", "", "medium", None, n
