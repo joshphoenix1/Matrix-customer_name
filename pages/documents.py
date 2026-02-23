@@ -24,6 +24,20 @@ def _file_ext(filename):
     return os.path.splitext(filename)[1].lower() if filename else ""
 
 
+def _extract_pdf_text(filepath):
+    """Extract text from a PDF file using pymupdf."""
+    try:
+        import fitz  # pymupdf
+        doc = fitz.open(filepath)
+        pages = []
+        for page in doc:
+            pages.append(page.get_text())
+        doc.close()
+        return "\n\n".join(pages)
+    except Exception as e:
+        return f"[PDF text extraction failed: {str(e)}]"
+
+
 def _format_size(size_bytes):
     if size_bytes < 1024:
         return f"{size_bytes} B"
@@ -197,7 +211,9 @@ def handle_upload(contents, filename):
         except Exception:
             text_content = "[Could not decode file content]"
     elif ext == ".pdf":
-        text_content = f"[PDF file: {filename}, {_format_size(file_size)}. PDF text extraction not available — binary content uploaded.]"
+        text_content = _extract_pdf_text(filepath)
+        if not text_content.strip():
+            text_content = f"[PDF file: {filename}, {_format_size(file_size)}. No extractable text found.]"
 
     # Run AI analysis
     if text_content:
@@ -274,6 +290,8 @@ def handle_search(n_clicks, query):
                         content = f.read(50000)
                 except Exception:
                     pass
+            elif ext == ".pdf":
+                content = _extract_pdf_text(d["filepath"])[:50000]
         doc_data.append({
             "filename": d["filename"],
             "content": content,
