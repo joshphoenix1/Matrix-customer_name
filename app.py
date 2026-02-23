@@ -3,9 +3,11 @@ Matrix AI Assistant — Multi-page Dash application entry point.
 """
 
 import os
+import base64
 import dash
 from dash import html, dcc
 import dash_bootstrap_components as dbc
+from flask import request, Response
 from config import COLORS, COMPANY_NAME, CACHE_DIR
 
 # ── Diskcache for background callbacks ──
@@ -23,6 +25,24 @@ app = dash.Dash(
         dbc.icons.BOOTSTRAP,
     ],
 )
+
+server = app.server
+
+# ── HTTP Basic Auth (browser caches credentials for the session) ──
+AUTH_USERNAME = os.getenv("AUTH_USERNAME", "matrix")
+AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "morpheus")
+
+
+@server.before_request
+def require_auth():
+    auth = request.authorization
+    if not auth or auth.username != AUTH_USERNAME or auth.password != AUTH_PASSWORD:
+        return Response(
+            "Unauthorized",
+            401,
+            {"WWW-Authenticate": 'Basic realm="Matrix AI Assistant"'},
+        )
+
 
 # ── Initialize database on import ──
 import db
