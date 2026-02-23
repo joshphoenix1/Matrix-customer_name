@@ -322,7 +322,10 @@ URGENCY_TO_PRIORITY = {
     Input("dashboard-refresh-trigger", "data"),
 )
 def update_greeting(_):
-    return f"{_greeting()}."
+    user_name = db.get_setting("user_name", "")
+    first_name = user_name.split()[0] if user_name else ""
+    suffix = f", {first_name}" if first_name else ""
+    return f"{_greeting()}{suffix}."
 
 
 @callback(
