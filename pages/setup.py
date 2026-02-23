@@ -121,8 +121,6 @@ def layout():
                                 options=[{"label": i, "value": i} for i in INDUSTRY_OPTIONS],
                                 value=industry or None,
                                 placeholder="Select your industry...",
-                                style={"borderRadius": "8px"},
-                                className="dash-dropdown-dark",
                             ),
                         ],
                     ),

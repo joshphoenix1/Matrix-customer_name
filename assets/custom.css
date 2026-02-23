@@ -59,41 +59,32 @@ body {
     color: #636E72 !important;
 }
 
-/* ── Dash Dropdown dark theme ── */
-.dash-dropdown-dark .Select-control {
-    background-color: #0D0D1A !important;
-    border: 1px solid #2D3436 !important;
+/* ── Dash 4 Dropdown dark theme (CSS variable overrides) ── */
+:root {
+    --Dash-Fill-Inverse-Strong: #0D0D1A;
+    --Dash-Stroke-Strong: #2D3436;
+    --Dash-Text-Strong: #FAFAFA;
+    --Dash-Text-Weak: #B2BEC3;
+    --Dash-Text-Disabled: #636E72;
+    --Dash-Fill-Interactive-Strong: #6C5CE7;
+    --Dash-Fill-Interactive-Weak: rgba(108, 92, 231, 0.2);
+    --Dash-Fill-Disabled: #2D3436;
+    --Dash-Shading-Strong: rgba(0, 0, 0, 0.4);
+    --Dash-Shading-Weak: rgba(0, 0, 0, 0.2);
+    --Dash-Spacing: 4px;
+}
+.dash-dropdown {
     border-radius: 8px !important;
-    color: #FAFAFA !important;
 }
-.dash-dropdown-dark .Select-menu-outer {
-    background-color: #1E1E2E !important;
-    border: 1px solid #2D3436 !important;
+.dash-dropdown-content {
+    background: #1E1E2E !important;
     border-radius: 8px !important;
 }
-.dash-dropdown-dark .VirtualizedSelectOption {
-    background-color: #1E1E2E !important;
-    color: #FAFAFA !important;
+.dash-dropdown-option:hover {
+    background: rgba(108, 92, 231, 0.3) !important;
 }
-.dash-dropdown-dark .VirtualizedSelectFocusedOption {
-    background-color: rgba(108, 92, 231, 0.3) !important;
-    color: #FAFAFA !important;
-}
-.dash-dropdown-dark .Select-value-label,
-.dash-dropdown-dark .Select-placeholder {
-    color: #FAFAFA !important;
-}
-.dash-dropdown-dark .Select-placeholder {
-    color: #636E72 !important;
-}
-.dash-dropdown-dark .Select-arrow {
-    border-color: #636E72 transparent transparent !important;
-}
-.dash-dropdown-dark .Select-clear {
-    color: #636E72 !important;
-}
-.dash-dropdown-dark .Select-input input {
-    color: #FAFAFA !important;
+.dash-dropdown-search-container {
+    background: #0D0D1A !important;
 }
 
 /* ── Input date picker dark ── */
