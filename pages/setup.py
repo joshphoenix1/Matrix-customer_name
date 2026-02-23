@@ -146,7 +146,16 @@ def layout():
                         style={"color": COLORS["text_primary"], "marginBottom": "8px"},
                     ),
                     html.P(
-                        "Your API key powers the AI assistant. Get one from console.anthropic.com.",
+                        [
+                            "Your API key powers the AI assistant. Get one from ",
+                            html.A(
+                                "console.anthropic.com",
+                                href="https://console.anthropic.com",
+                                target="_blank",
+                                style={"color": COLORS["accent"], "textDecoration": "underline"},
+                            ),
+                            ".",
+                        ],
                         style={"color": COLORS["text_muted"], "fontSize": "0.85rem", "marginBottom": "12px"},
                     ),
                     # Status badge
