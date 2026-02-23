@@ -40,12 +40,32 @@ def _input_field(label, input_id, placeholder="", value="", input_type="text"):
     )
 
 
+INDUSTRY_OPTIONS = [
+    "Technology / SaaS",
+    "Financial Services",
+    "Healthcare / Biotech",
+    "Real Estate",
+    "E-Commerce / Retail",
+    "Manufacturing",
+    "Professional Services / Consulting",
+    "Media / Entertainment",
+    "Education",
+    "Energy / Cleantech",
+    "Legal",
+    "Logistics / Supply Chain",
+    "Nonprofit / NGO",
+    "Government / Public Sector",
+    "Other",
+]
+
+
 def layout():
     # Load saved settings
     imap_server = db.get_setting("imap_server", "imap.gmail.com")
     imap_email = db.get_setting("imap_email", "")
     imap_password = db.get_setting("imap_password", "")
     company_name = db.get_setting("company_name", "")
+    industry = db.get_setting("industry", "")
     user_name = db.get_setting("user_name", "")
     user_role = db.get_setting("user_role", "")
 
@@ -73,6 +93,28 @@ def layout():
                 children=[
                     html.H4("Company Info", style={"color": COLORS["text_primary"], "marginBottom": "16px"}),
                     _input_field("Company Name", "setup-company-name", "Your company name", company_name),
+                    html.Div(
+                        style={"marginBottom": "16px"},
+                        children=[
+                            html.Label(
+                                "Industry",
+                                style={
+                                    "color": COLORS["text_secondary"],
+                                    "fontSize": "0.85rem",
+                                    "marginBottom": "6px",
+                                    "display": "block",
+                                },
+                            ),
+                            dcc.Dropdown(
+                                id="setup-industry",
+                                options=[{"label": i, "value": i} for i in INDUSTRY_OPTIONS],
+                                value=industry or None,
+                                placeholder="Select your industry...",
+                                style={"borderRadius": "8px"},
+                                className="dash-dropdown-dark",
+                            ),
+                        ],
+                    ),
                 ],
             ),
             # Email Inbox Connection
@@ -148,6 +190,7 @@ def layout():
     Output("setup-save-status", "children"),
     Input("setup-save-btn", "n_clicks"),
     State("setup-company-name", "value"),
+    State("setup-industry", "value"),
     State("setup-imap-server", "value"),
     State("setup-imap-email", "value"),
     State("setup-imap-password", "value"),
@@ -155,11 +198,12 @@ def layout():
     State("setup-user-role", "value"),
     prevent_initial_call=True,
 )
-def complete_setup(n_clicks, company_name, imap_server, imap_email, imap_password, user_name, user_role):
+def complete_setup(n_clicks, company_name, industry, imap_server, imap_email, imap_password, user_name, user_role):
     if not n_clicks:
         return no_update
 
     db.save_setting("company_name", company_name or "")
+    db.save_setting("industry", industry or "")
     db.save_setting("imap_server", imap_server or "imap.gmail.com")
     db.save_setting("imap_email", imap_email or "")
     db.save_setting("imap_password", imap_password or "")

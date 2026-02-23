@@ -59,6 +59,43 @@ body {
     color: #636E72 !important;
 }
 
+/* ── Dash Dropdown dark theme ── */
+.dash-dropdown-dark .Select-control {
+    background-color: #0D0D1A !important;
+    border: 1px solid #2D3436 !important;
+    border-radius: 8px !important;
+    color: #FAFAFA !important;
+}
+.dash-dropdown-dark .Select-menu-outer {
+    background-color: #1E1E2E !important;
+    border: 1px solid #2D3436 !important;
+    border-radius: 8px !important;
+}
+.dash-dropdown-dark .VirtualizedSelectOption {
+    background-color: #1E1E2E !important;
+    color: #FAFAFA !important;
+}
+.dash-dropdown-dark .VirtualizedSelectFocusedOption {
+    background-color: rgba(108, 92, 231, 0.3) !important;
+    color: #FAFAFA !important;
+}
+.dash-dropdown-dark .Select-value-label,
+.dash-dropdown-dark .Select-placeholder {
+    color: #FAFAFA !important;
+}
+.dash-dropdown-dark .Select-placeholder {
+    color: #636E72 !important;
+}
+.dash-dropdown-dark .Select-arrow {
+    border-color: #636E72 transparent transparent !important;
+}
+.dash-dropdown-dark .Select-clear {
+    color: #636E72 !important;
+}
+.dash-dropdown-dark .Select-input input {
+    color: #FAFAFA !important;
+}
+
 /* ── Input date picker dark ── */
 input[type="date"]::-webkit-calendar-picker-indicator {
     filter: invert(1);
