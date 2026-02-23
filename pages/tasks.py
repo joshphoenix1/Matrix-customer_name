@@ -139,6 +139,21 @@ def _board_card(task):
                 },
             )
         )
+        move_btns.append(
+            html.Button(
+                html.I(className="bi bi-trash3"),
+                id={"type": "task-move", "index": task["id"], "action": "delete"},
+                title="Delete",
+                style={
+                    "background": "transparent",
+                    "border": "none",
+                    "color": COLORS["danger"],
+                    "cursor": "pointer",
+                    "fontSize": "0.9rem",
+                    "padding": "2px 6px",
+                },
+            )
+        )
 
     return html.Div(
         style={
@@ -178,21 +193,33 @@ def _board_card(task):
                     "lineHeight": "1.4",
                 },
             ) if task.get("description") else None,
-            # Footer: priority badge + due date
+            # Footer: priority badge + created date + due date
             html.Div(
                 style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"},
                 children=[
-                    html.Span(
-                        priority.upper(),
-                        style={
-                            "background": priority_color,
-                            "color": "#fff",
-                            "padding": "1px 7px",
-                            "borderRadius": "3px",
-                            "fontSize": "0.6rem",
-                            "fontWeight": "700",
-                            "letterSpacing": "0.5px",
-                        },
+                    html.Div(
+                        style={"display": "flex", "alignItems": "center", "gap": "6px"},
+                        children=[
+                            html.Span(
+                                priority.upper(),
+                                style={
+                                    "background": priority_color,
+                                    "color": "#fff",
+                                    "padding": "1px 7px",
+                                    "borderRadius": "3px",
+                                    "fontSize": "0.6rem",
+                                    "fontWeight": "700",
+                                    "letterSpacing": "0.5px",
+                                },
+                            ),
+                            html.Span(
+                                task.get("created_at", "")[:10],
+                                style={
+                                    "color": COLORS["text_muted"],
+                                    "fontSize": "0.65rem",
+                                },
+                            ) if task.get("created_at") else None,
+                        ],
                     ),
                     html.Span(
                         due_text,
@@ -220,7 +247,7 @@ layout = html.Div(
                 html.Div(
                     children=[
                         html.H2("Task Board", style={"color": COLORS["text_primary"], "margin": 0}),
-                        html.P("Drag-style Kanban board. Move tasks across columns.", style={"color": COLORS["text_muted"], "fontSize": "0.9rem", "margin": "4px 0 0 0"}),
+                        html.P("Track priorities and manage tasks.", style={"color": COLORS["text_muted"], "fontSize": "0.9rem", "margin": "4px 0 0 0"}),
                     ]
                 ),
                 dbc.Button(
@@ -334,18 +361,21 @@ def toggle_form(open_clicks, cancel_clicks, create_clicks, is_open):
     Input({"type": "task-move", "index": ALL, "action": ALL}, "n_clicks"),
 )
 def render_board(_, move_clicks):
-    # Handle move action
+    # Handle move/delete action
     if ctx.triggered_id and isinstance(ctx.triggered_id, dict) and ctx.triggered_id.get("type") == "task-move":
         task_id = ctx.triggered_id["index"]
         action = ctx.triggered_id["action"]
-        status_map = {
-            "start": "in_progress",
-            "complete": "completed",
-            "cancel": "cancelled",
-            "reopen": "pending",
-        }
-        if action in status_map:
-            db.update_task(task_id, status=status_map[action])
+        if action == "delete":
+            db.delete_task(task_id)
+        else:
+            status_map = {
+                "start": "in_progress",
+                "complete": "completed",
+                "cancel": "cancelled",
+                "reopen": "pending",
+            }
+            if action in status_map:
+                db.update_task(task_id, status=status_map[action])
 
     all_tasks = db.get_tasks()
 

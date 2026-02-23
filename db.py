@@ -250,6 +250,11 @@ def update_task(task_id, **kwargs):
         conn.execute(f"UPDATE tasks SET {set_clause} WHERE id = ?", values)
 
 
+def delete_task(task_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+
+
 def get_active_tasks_summary():
     """Short summary string for injecting into AI context."""
     tasks = get_tasks()
