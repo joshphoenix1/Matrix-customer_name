@@ -14,6 +14,7 @@ PAGE_ICONS = {
     "Meetings": "bi bi-calendar-event-fill",
     "Documents": "bi bi-file-earmark-text-fill",
     "Emails": "bi bi-envelope-open-fill",
+    "Deploy": "bi bi-rocket-takeoff-fill",
     "Setup": "bi bi-gear-fill",
 }
 
