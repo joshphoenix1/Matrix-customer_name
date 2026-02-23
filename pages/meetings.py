@@ -189,7 +189,6 @@ def meeting_actions(view_clicks, summarize_clicks):
                     description=f"From meeting: {meeting['title']}\n{ai['description']}",
                     priority="high",
                     due_date=ai.get("due_date"),
-                    assigned_to=ai.get("owner", ""),
                 )
                 db.save_action_item(
                     meeting_id=meeting_id,

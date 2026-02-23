@@ -288,3 +288,86 @@ Keep it concise and actionable. Use markdown formatting."""
         return response.content[0].text
     except Exception as e:
         return f"Could not generate daily priorities: {str(e)}"
+
+
+def generate_executive_plan(tasks, meetings, emails, overdue_tasks):
+    """
+    Generate a structured daily executive plan with time blocks and strategic focus.
+    Returns the plan as a markdown string.
+    """
+    client = _get_client()
+    if not client:
+        return "API key not configured."
+
+    today = date.today().isoformat()
+    from datetime import datetime as _dt
+    current_time = _dt.now().strftime("%H:%M")
+
+    task_text = ""
+    for t in tasks:
+        due = f" (due {t['due_date']})" if t.get("due_date") else ""
+        task_text += f"- [{t['priority'].upper()}] {t['title']}{due} — {t['status']}\n"
+
+    overdue_text = ""
+    for t in overdue_tasks:
+        overdue_text += f"- [{t['priority'].upper()}] {t['title']} (was due {t['due_date']})\n"
+
+    meeting_text = ""
+    for m in meetings:
+        notes_preview = ""
+        if m.get("raw_notes"):
+            notes_preview = f" — Notes: {m['raw_notes'][:80]}..."
+        meeting_text += f"- {m['title']} ({m['date']}){notes_preview}\n"
+
+    email_text = ""
+    for e in emails:
+        summary = e.get("processed_summary", "")[:80]
+        email_text += f"- [{e.get('urgency', 'routine').upper()}] {e['subject']} — {summary}\n"
+
+    prompt = f"""You are a world-class executive chief of staff for {COMPANY_NAME}. Create a structured Daily Executive Plan for today ({today}, current time: {current_time}).
+
+## Context
+
+Active Tasks ({len(tasks)}):
+{task_text or "None"}
+
+Overdue Tasks ({len(overdue_tasks)}):
+{overdue_text or "None"}
+
+Today's Meetings:
+{meeting_text or "None"}
+
+Recent Emails (unresolved):
+{email_text or "None"}
+
+## Instructions
+
+Build a concrete, time-blocked executive plan. Structure it as:
+
+### Morning Block (before 12:00)
+- List specific actions with estimated durations
+- Prioritize critical/overdue items first
+
+### Afternoon Block (12:00–17:00)
+- Strategic work, meetings, follow-ups
+
+### End of Day (17:00+)
+- Review, prep for tomorrow, delegation notes
+
+### Key Decisions Needed Today
+- List 2-3 decisions the executive should make today based on current context
+
+### Risk Watch
+- Flag anything that could derail the day (overdue deadlines, unanswered critical emails, scheduling conflicts)
+
+Be specific — reference actual task names, meeting titles, and email subjects. No generic advice. Use markdown formatting with bold for emphasis. Keep it actionable and tight."""
+
+    try:
+        response = client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text
+    except Exception as e:
+        return f"Could not generate executive plan: {str(e)}"

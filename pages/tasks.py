@@ -8,9 +8,100 @@ import dash_bootstrap_components as dbc
 from datetime import date
 from config import COLORS
 import db
-from components.task_card import task_card
 
 dash.register_page(__name__, path="/tasks", name="Tasks", order=3)
+
+PRIORITY_COLORS = {
+    "critical": COLORS["danger"],
+    "high": "#E17055",
+    "medium": COLORS["warning"],
+    "low": COLORS["info"],
+}
+
+STATUS_LABELS = {
+    "pending": ("Pending", COLORS["text_muted"]),
+    "in_progress": ("In Progress", COLORS["info"]),
+    "completed": ("Done", COLORS["success"]),
+    "cancelled": ("Cancelled", COLORS["danger"]),
+}
+
+
+def _task_card(task):
+    """Render a single task card inline."""
+    priority_color = PRIORITY_COLORS.get(task["priority"], COLORS["text_muted"])
+    status_label, status_color = STATUS_LABELS.get(task["status"], ("Unknown", COLORS["text_muted"]))
+
+    due_text = ""
+    if task.get("due_date"):
+        due_text = f"Due: {task['due_date']}"
+
+    return html.Div(
+        style={
+            "background": COLORS["card_bg"],
+            "borderRadius": "12px",
+            "padding": "16px 20px",
+            "marginBottom": "8px",
+            "borderLeft": f"4px solid {priority_color}",
+        },
+        children=[
+            html.Div(
+                style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "8px"},
+                children=[
+                    html.H4(
+                        task["title"],
+                        style={
+                            "color": COLORS["text_primary"],
+                            "margin": 0,
+                            "fontSize": "0.95rem",
+                            "fontWeight": "600",
+                            "textDecoration": "line-through" if task["status"] == "completed" else "none",
+                        },
+                    ),
+                    html.Div(
+                        style={"display": "flex", "gap": "8px", "alignItems": "center"},
+                        children=[
+                            html.Span(
+                                task["priority"].upper(),
+                                style={
+                                    "background": priority_color,
+                                    "color": "#fff",
+                                    "padding": "2px 8px",
+                                    "borderRadius": "4px",
+                                    "fontSize": "0.7rem",
+                                    "fontWeight": "600",
+                                },
+                            ),
+                            html.Span(
+                                status_label,
+                                style={
+                                    "border": f"1px solid {status_color}",
+                                    "color": status_color,
+                                    "padding": "2px 8px",
+                                    "borderRadius": "4px",
+                                    "fontSize": "0.7rem",
+                                    "fontWeight": "600",
+                                },
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            html.P(
+                task.get("description", ""),
+                style={
+                    "color": COLORS["text_secondary"],
+                    "fontSize": "0.85rem",
+                    "margin": "0 0 6px 0",
+                    "lineHeight": "1.4",
+                },
+            ) if task.get("description") else None,
+            html.Span(
+                due_text,
+                style={"color": COLORS["text_muted"], "fontSize": "0.8rem"},
+            ) if due_text else None,
+        ],
+    )
+
 
 # ── Layout ──
 
@@ -22,7 +113,7 @@ layout = html.Div(
                 html.Div(
                     children=[
                         html.H2("Task Board", style={"color": COLORS["text_primary"], "margin": 0}),
-                        html.P("Track priorities, assignments, and accountability.", style={"color": COLORS["text_muted"], "fontSize": "0.9rem", "margin": "4px 0 0 0"}),
+                        html.P("Track priorities and accountability.", style={"color": COLORS["text_muted"], "fontSize": "0.9rem", "margin": "4px 0 0 0"}),
                     ]
                 ),
                 dbc.Button(
@@ -107,14 +198,7 @@ layout = html.Div(
                                         dbc.Label("Description", style={"color": COLORS["text_secondary"], "fontSize": "0.85rem"}),
                                         dbc.Textarea(id="task-description", placeholder="Task description...", style={"background": COLORS["body_bg"], "border": f"1px solid {COLORS['border']}", "color": COLORS["text_primary"], "minHeight": "80px"}),
                                     ],
-                                    md=8,
-                                ),
-                                dbc.Col(
-                                    [
-                                        dbc.Label("Assigned To", style={"color": COLORS["text_secondary"], "fontSize": "0.85rem"}),
-                                        dbc.Input(id="task-assigned", placeholder="Name...", style={"background": COLORS["body_bg"], "border": f"1px solid {COLORS['border']}", "color": COLORS["text_primary"]}),
-                                    ],
-                                    md=4,
+                                    md=12,
                                 ),
                             ],
                             className="mb-3",
@@ -228,8 +312,7 @@ def render_tasks(filter_val, create_clicks, status_clicks):
         elif t["status"] in ("completed", "cancelled"):
             actions.append(dbc.Button("Reopen", id={"type": "task-status-btn", "index": t["id"], "action": "reopen"}, size="sm", outline=True, color="secondary", style={"fontSize": "0.75rem"}))
 
-        card = task_card(t)
-        # Add action buttons to the card
+        card = _task_card(t)
         items.append(
             html.Div(
                 style={"position": "relative"},
@@ -250,24 +333,21 @@ def render_tasks(filter_val, create_clicks, status_clicks):
     Output("task-description", "value"),
     Output("task-priority", "value"),
     Output("task-due-date", "value"),
-    Output("task-assigned", "value"),
     Input("btn-create-task", "n_clicks"),
     State("task-title", "value"),
     State("task-description", "value"),
     State("task-priority", "value"),
     State("task-due-date", "value"),
-    State("task-assigned", "value"),
     prevent_initial_call=True,
 )
-def create_task(n, title, description, priority, due_date, assigned):
+def create_task(n, title, description, priority, due_date):
     if not n or not title or not title.strip():
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update
 
     db.create_task(
         title=title.strip(),
         description=(description or "").strip(),
         priority=priority or "medium",
         due_date=due_date or None,
-        assigned_to=(assigned or "").strip(),
     )
-    return "", "", "medium", None, ""
+    return "", "", "medium", None

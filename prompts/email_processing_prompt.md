@@ -10,6 +10,7 @@ Given an email with sender, subject, and body:
 2. **Summarize** in 2-3 concise sentences
 3. **Extract action items** if any exist
 4. **Recommend** whether to create a task
+5. **Detect meeting requests**: If the email is a meeting invitation, scheduling request, or contains a proposed meeting time/date, set `is_meeting_request` to true and extract the meeting details
 
 ## Output Format
 
@@ -26,5 +27,8 @@ Respond with valid JSON only, no markdown fencing:
     }
   ],
   "should_create_task": true or false,
-  "suggested_task_title": "Title for the task if should_create_task is true, else null"
+  "suggested_task_title": "Title for the task if should_create_task is true, else null",
+  "is_meeting_request": true or false,
+  "meeting_title": "Meeting title if is_meeting_request is true, else null",
+  "meeting_date": "YYYY-MM-DD if a specific date is mentioned, else null"
 }

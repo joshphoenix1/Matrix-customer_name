@@ -5,7 +5,6 @@ Chat page — Matrix AI Assistant conversation interface.
 import dash
 from dash import html, dcc, callback, Input, Output, State, no_update, ctx
 import dash_bootstrap_components as dbc
-from dash_chat import ChatComponent
 from config import COLORS, COMPANY_NAME
 import db
 from services.claude_client import chat as claude_chat

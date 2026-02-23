@@ -13,9 +13,6 @@ COMPANY_NAME = "M8TRX.AI"
 AGENT_NAME = "Matrix AI Assistant"
 BRAND_COLOR = "#6C5CE7"
 
-# ── Email Placeholder ──
-EMAIL_ADDRESS = "assistant@m8trx.ai"
-
 # ── LLM ──
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = "claude-sonnet-4-20250514"

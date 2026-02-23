@@ -4,7 +4,8 @@ Reusable navigation sidebar — reads from dash.page_registry.
 
 import dash
 from dash import html, dcc
-from config import COMPANY_NAME, EMAIL_ADDRESS, COLORS
+from config import COMPANY_NAME, COLORS
+import db
 
 PAGE_ICONS = {
     "Dashboard": "bi bi-grid-1x2-fill",
@@ -12,8 +13,8 @@ PAGE_ICONS = {
     "Tasks": "bi bi-check2-square",
     "Meetings": "bi bi-calendar-event-fill",
     "Documents": "bi bi-file-earmark-text-fill",
-    "Projects": "bi bi-kanban",
-    "Team Chat": "bi bi-chat-square-text-fill",
+    "Emails": "bi bi-envelope-open-fill",
+    "Setup": "bi bi-gear-fill",
 }
 
 
@@ -36,6 +37,10 @@ def create_sidebar():
                 style={"textDecoration": "none"},
             )
         )
+
+    # Get configured email for footer display
+    imap_email = db.get_setting("imap_email", "")
+    footer_text = imap_email if imap_email else "Not configured"
 
     return html.Div(
         id="sidebar",
@@ -91,7 +96,7 @@ def create_sidebar():
                 },
                 children=[
                     html.P(
-                        "Email your AI:",
+                        "Connected Inbox:",
                         style={
                             "color": COLORS["text_muted"],
                             "fontSize": "0.7rem",
@@ -101,7 +106,7 @@ def create_sidebar():
                         },
                     ),
                     html.P(
-                        EMAIL_ADDRESS,
+                        footer_text,
                         style={
                             "color": COLORS["accent"],
                             "fontSize": "0.8rem",

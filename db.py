@@ -32,7 +32,6 @@ CREATE TABLE IF NOT EXISTS tasks (
     priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('critical', 'high', 'medium', 'low')),
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'cancelled')),
     due_date TEXT,
-    assigned_to TEXT DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     completed_at TEXT
 );
@@ -80,43 +79,10 @@ CREATE TABLE IF NOT EXISTS documents (
     uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE TABLE IF NOT EXISTS employees (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL,
-    role TEXT NOT NULL,
-    department TEXT NOT NULL,
-    avatar_color TEXT DEFAULT '#6C5CE7',
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'away', 'offline')),
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS projects (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    key TEXT NOT NULL UNIQUE,
-    description TEXT DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'archived')),
-    lead_id INTEGER,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (lead_id) REFERENCES employees(id) ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS channels (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    description TEXT DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS channel_messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    channel_id INTEGER NOT NULL,
-    sender_name TEXT NOT NULL,
-    sender_avatar_color TEXT DEFAULT '#6C5CE7',
-    content TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
 
@@ -127,10 +93,6 @@ def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     with get_db() as conn:
         conn.executescript(SCHEMA)
-        # Add project_id column to tasks if it doesn't exist
-        cols = [row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()]
-        if "project_id" not in cols:
-            conn.execute("ALTER TABLE tasks ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL")
 
 
 @contextmanager
@@ -209,11 +171,11 @@ def get_messages(conversation_id):
 
 # ── Tasks ──
 
-def create_task(title, description="", priority="medium", due_date=None, assigned_to="", project_id=None):
+def create_task(title, description="", priority="medium", due_date=None):
     with get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO tasks (title, description, priority, due_date, assigned_to, project_id) VALUES (?, ?, ?, ?, ?, ?)",
-            (title, description, priority, due_date, assigned_to, project_id),
+            "INSERT INTO tasks (title, description, priority, due_date) VALUES (?, ?, ?, ?)",
+            (title, description, priority, due_date),
         )
         return cur.lastrowid
 
@@ -255,7 +217,7 @@ def get_overdue_tasks():
 
 def update_task(task_id, **kwargs):
     with get_db() as conn:
-        allowed = {"title", "description", "priority", "status", "due_date", "assigned_to", "project_id"}
+        allowed = {"title", "description", "priority", "status", "due_date"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if "status" in updates and updates["status"] == "completed":
             updates["completed_at"] = datetime.now().isoformat()
@@ -420,119 +382,19 @@ def update_document_analysis(doc_id, ai_analysis):
         )
 
 
-# ── Employees ──
+# ── Settings ──
 
-def create_employee(name, email, role, department, avatar_color="#6C5CE7", status="active"):
+def save_setting(key, value):
     with get_db() as conn:
-        cur = conn.execute(
-            "INSERT INTO employees (name, email, role, department, avatar_color, status) VALUES (?, ?, ?, ?, ?, ?)",
-            (name, email, role, department, avatar_color, status),
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+            (key, value),
         )
-        return cur.lastrowid
 
 
-def get_employees():
-    with get_db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM employees ORDER BY name ASC"
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-
-def get_employee(employee_id):
+def get_setting(key, default=None):
     with get_db() as conn:
         row = conn.execute(
-            "SELECT * FROM employees WHERE id = ?", (employee_id,)
+            "SELECT value FROM settings WHERE key = ?", (key,)
         ).fetchone()
-        return dict(row) if row else None
-
-
-# ── Projects ──
-
-def create_project(name, key, description="", lead_id=None, status="active"):
-    with get_db() as conn:
-        cur = conn.execute(
-            "INSERT INTO projects (name, key, description, lead_id) VALUES (?, ?, ?, ?)",
-            (name, key, description, lead_id),
-        )
-        return cur.lastrowid
-
-
-def get_projects(status=None):
-    with get_db() as conn:
-        if status:
-            rows = conn.execute(
-                "SELECT * FROM projects WHERE status = ? ORDER BY created_at DESC", (status,)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM projects ORDER BY created_at DESC"
-            ).fetchall()
-        return [dict(r) for r in rows]
-
-
-def get_project(project_id):
-    with get_db() as conn:
-        row = conn.execute(
-            "SELECT * FROM projects WHERE id = ?", (project_id,)
-        ).fetchone()
-        return dict(row) if row else None
-
-
-def get_tasks_by_project(project_id):
-    with get_db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM tasks WHERE project_id = ? ORDER BY CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END, created_at DESC",
-            (project_id,),
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-
-# ── Channels ──
-
-def create_channel(name, description=""):
-    with get_db() as conn:
-        cur = conn.execute(
-            "INSERT INTO channels (name, description) VALUES (?, ?)",
-            (name, description),
-        )
-        return cur.lastrowid
-
-
-def get_channels():
-    with get_db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM channels ORDER BY name ASC"
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-
-def get_channel(channel_id):
-    with get_db() as conn:
-        row = conn.execute(
-            "SELECT * FROM channels WHERE id = ?", (channel_id,)
-        ).fetchone()
-        return dict(row) if row else None
-
-
-def send_channel_message(channel_id, sender_name, content, sender_avatar_color="#6C5CE7"):
-    with get_db() as conn:
-        cur = conn.execute(
-            "INSERT INTO channel_messages (channel_id, sender_name, sender_avatar_color, content) VALUES (?, ?, ?, ?)",
-            (channel_id, sender_name, sender_avatar_color, content),
-        )
-        return cur.lastrowid
-
-
-def get_channel_messages(channel_id, limit=100):
-    with get_db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM channel_messages WHERE channel_id = ? ORDER BY created_at ASC LIMIT ?",
-            (channel_id, limit),
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-
-def delete_channel_messages(channel_id):
-    with get_db() as conn:
-        conn.execute("DELETE FROM channel_messages WHERE channel_id = ?", (channel_id,))
+        return dict(row)["value"] if row else default
