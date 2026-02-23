@@ -11,7 +11,7 @@ import json
 from datetime import datetime
 from config import COLORS, UPLOADS_DIR
 import db
-from services.claude_client import analyze_document
+from services.claude_client import analyze_document, search_documents
 
 dash.register_page(__name__, path="/documents", name="Documents", order=5)
 
@@ -85,6 +85,54 @@ layout = html.Div(
                     multiple=False,
                 ),
                 html.Div(id="doc-upload-status", style={"marginTop": "16px"}),
+            ],
+        ),
+        # AI Document Search
+        html.Div(
+            style={
+                "background": COLORS["card_bg"],
+                "borderRadius": "12px",
+                "padding": "24px",
+                "marginBottom": "24px",
+                "borderLeft": f"4px solid {COLORS['info']}",
+            },
+            children=[
+                html.H4(
+                    [html.I(className="bi bi-search", style={"marginRight": "10px"}), "AI Document Search"],
+                    style={"color": COLORS["text_primary"], "marginBottom": "8px"},
+                ),
+                html.P(
+                    "Search across all uploaded documents using AI. Ask questions about your data.",
+                    style={"color": COLORS["text_muted"], "fontSize": "0.85rem", "marginBottom": "16px"},
+                ),
+                html.Div(
+                    style={"display": "flex", "gap": "8px"},
+                    children=[
+                        dbc.Input(
+                            id="doc-search-input",
+                            placeholder="e.g. What revenue figures are mentioned? / Find all client names / Summarize key terms...",
+                            style={
+                                "background": COLORS["body_bg"],
+                                "border": f"1px solid {COLORS['border']}",
+                                "color": COLORS["text_primary"],
+                                "borderRadius": "8px",
+                                "flex": "1",
+                            },
+                        ),
+                        dbc.Button(
+                            [html.I(className="bi bi-stars", style={"marginRight": "6px"}), "Search"],
+                            id="doc-search-btn",
+                            color="primary",
+                            style={"background": COLORS["info"], "border": "none"},
+                        ),
+                    ],
+                ),
+                dcc.Loading(
+                    id="doc-search-loading",
+                    type="dot",
+                    color=COLORS["info"],
+                    children=[html.Div(id="doc-search-results", style={"marginTop": "16px"})],
+                ),
             ],
         ),
         # Document list
@@ -198,6 +246,64 @@ def view_document(view_clicks):
         return html.P("Document not found.", style={"color": COLORS["danger"]}), no_update
 
     return _render_doc_detail(doc), doc_id
+
+
+@callback(
+    Output("doc-search-results", "children"),
+    Input("doc-search-btn", "n_clicks"),
+    State("doc-search-input", "value"),
+    prevent_initial_call=True,
+)
+def handle_search(n_clicks, query):
+    if not n_clicks or not query or not query.strip():
+        return no_update
+
+    docs = db.get_documents()
+    if not docs:
+        return html.P("No documents uploaded yet. Upload files first, then search.", style={"color": COLORS["warning"], "fontSize": "0.9rem"})
+
+    # Load content for each document
+    doc_data = []
+    for d in docs:
+        content = ""
+        if d.get("filepath") and os.path.exists(d["filepath"]):
+            ext = d.get("file_type", "")
+            if ext in (".txt", ".md", ".csv", ".json"):
+                try:
+                    with open(d["filepath"], "r", errors="replace") as f:
+                        content = f.read(50000)
+                except Exception:
+                    pass
+        doc_data.append({
+            "filename": d["filename"],
+            "content": content,
+            "ai_analysis": d.get("ai_analysis", ""),
+        })
+
+    result = search_documents(query.strip(), doc_data)
+
+    return html.Div(
+        style={
+            "background": COLORS["body_bg"],
+            "borderRadius": "8px",
+            "padding": "20px",
+            "borderLeft": f"3px solid {COLORS['info']}",
+        },
+        children=[
+            html.Div(
+                style={"display": "flex", "alignItems": "center", "gap": "8px", "marginBottom": "12px"},
+                children=[
+                    html.I(className="bi bi-stars", style={"color": COLORS["info"]}),
+                    html.Span("Search Results", style={"color": COLORS["info"], "fontSize": "0.85rem", "fontWeight": "600"}),
+                    html.Span(f"— {len(doc_data)} document{'s' if len(doc_data) != 1 else ''} scanned", style={"color": COLORS["text_muted"], "fontSize": "0.8rem"}),
+                ],
+            ),
+            dcc.Markdown(
+                result,
+                style={"color": COLORS["text_secondary"], "fontSize": "0.9rem", "lineHeight": "1.6"},
+            ),
+        ],
+    )
 
 
 def _render_doc_list():

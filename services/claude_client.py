@@ -240,6 +240,54 @@ Respond with valid JSON only, no markdown fencing:
         }
 
 
+def search_documents(query, documents):
+    """
+    Search across uploaded documents using AI to find relevant data.
+    documents: list of dicts with filename, content, ai_analysis fields.
+    Returns a markdown string with the answer and source references.
+    """
+    client = _get_client()
+    if not client:
+        return "API key not configured. Add your Anthropic API key in Setup to enable document search."
+
+    doc_context = ""
+    for i, doc in enumerate(documents, 1):
+        doc_context += f"\n--- Document {i}: {doc['filename']} ---\n"
+        if doc.get("content"):
+            doc_context += doc["content"][:30000] + "\n"
+        if doc.get("ai_analysis"):
+            doc_context += f"\nPrior AI Analysis: {doc['ai_analysis'][:5000]}\n"
+
+    if not doc_context.strip():
+        return "No document content available to search."
+
+    prompt = f"""You are a document research assistant. The user has uploaded several documents and is searching for specific information.
+
+## User Query
+{query}
+
+## Available Documents
+{doc_context}
+
+## Instructions
+- Search through ALL provided documents to answer the query
+- Be specific — quote relevant data, numbers, names, dates directly from the documents
+- Cite which document each piece of information comes from (by filename)
+- If the information isn't found in any document, say so clearly
+- Format your response in clear markdown with headers if needed
+- Keep the response concise and focused on what was asked"""
+
+    try:
+        response = client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text
+    except Exception as e:
+        return f"Search error: {str(e)}"
+
+
 def generate_daily_priorities(tasks, meetings, emails):
     """
     Generate a morning briefing / daily priorities list.
