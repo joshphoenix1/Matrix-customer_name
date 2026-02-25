@@ -6,6 +6,7 @@ import sqlite3
 import json
 from datetime import datetime, date
 from contextlib import contextmanager
+from werkzeug.security import generate_password_hash, check_password_hash
 from config import DB_PATH
 
 SCHEMA = """
@@ -449,6 +450,25 @@ def get_setting(key, default=None):
             "SELECT value FROM settings WHERE key = ?", (key,)
         ).fetchone()
         return dict(row)["value"] if row else default
+
+
+# ── Auth Credentials ──
+
+def save_auth_credentials(username, password):
+    """Save hashed login credentials to the settings table."""
+    save_setting("auth_username", username)
+    save_setting("auth_password_hash", generate_password_hash(password))
+
+
+def verify_auth_credentials(username, password):
+    """Check username/password against stored credentials. Returns True if valid."""
+    stored_user = get_setting("auth_username")
+    stored_hash = get_setting("auth_password_hash")
+    if not stored_user or not stored_hash:
+        return None  # No DB credentials configured
+    if username != stored_user:
+        return False
+    return check_password_hash(stored_hash, password)
 
 
 # ── Invoices ──

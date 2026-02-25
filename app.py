@@ -36,12 +36,22 @@ AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "morpheus")
 @server.before_request
 def require_auth():
     auth = request.authorization
-    if not auth or auth.username != AUTH_USERNAME or auth.password != AUTH_PASSWORD:
+    if not auth:
         return Response(
-            "Unauthorized",
-            401,
+            "Unauthorized", 401,
             {"WWW-Authenticate": 'Basic realm="Matrix AI Assistant"'},
         )
+    # Master login (env vars) always works
+    if auth.username == AUTH_USERNAME and auth.password == AUTH_PASSWORD:
+        return
+    # Check user-configured credentials from database
+    import db as _db
+    if _db.verify_auth_credentials(auth.username, auth.password):
+        return
+    return Response(
+        "Unauthorized", 401,
+        {"WWW-Authenticate": 'Basic realm="Matrix AI Assistant"'},
+    )
 
 
 # ── Initialize database on import ──

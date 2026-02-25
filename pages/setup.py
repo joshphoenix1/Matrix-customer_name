@@ -248,6 +248,46 @@ def layout():
                     _input_field("Your Role", "setup-user-role", "CEO / Founder", user_role),
                 ],
             ),
+            # Dashboard Login / Password Change
+            html.Div(
+                style={
+                    "background": COLORS["card_bg"],
+                    "borderRadius": "12px",
+                    "padding": "24px",
+                    "marginBottom": "20px",
+                    "borderLeft": f"4px solid {COLORS['danger']}",
+                },
+                children=[
+                    html.H4(
+                        [
+                            html.I(className="bi bi-shield-lock-fill", style={"marginRight": "10px"}),
+                            "Dashboard Login",
+                        ],
+                        style={"color": COLORS["text_primary"], "marginBottom": "8px"},
+                    ),
+                    html.P(
+                        "Change the username and password used to log into this dashboard.",
+                        style={"color": COLORS["text_muted"], "fontSize": "0.85rem", "marginBottom": "16px"},
+                    ),
+                    _input_field("Username", "setup-auth-username", "Enter new username", db.get_setting("auth_username", "")),
+                    _input_field("Current Password", "setup-auth-current-pw", "Enter current password", "", input_type="password"),
+                    _input_field("New Password", "setup-auth-new-pw", "Enter new password", "", input_type="password"),
+                    _input_field("Confirm New Password", "setup-auth-confirm-pw", "Confirm new password", "", input_type="password"),
+                    html.Div(
+                        style={"display": "flex", "alignItems": "center", "gap": "12px", "marginTop": "8px"},
+                        children=[
+                            dbc.Button(
+                                [html.I(className="bi bi-key-fill", style={"marginRight": "6px"}), "Update Login"],
+                                id="setup-update-login-btn",
+                                size="sm",
+                                color="danger",
+                                outline=True,
+                            ),
+                            html.Div(id="setup-login-update-status"),
+                        ],
+                    ),
+                ],
+            ),
             # Save button + status
             html.Div(
                 style={"display": "flex", "alignItems": "center", "gap": "16px"},
@@ -393,3 +433,70 @@ def test_imap(n_clicks, server, email, password):
             [html.I(className="bi bi-x-circle-fill", style={"marginRight": "6px"}), message],
             style={"color": COLORS["danger"], "fontSize": "0.85rem"},
         )
+
+
+@callback(
+    Output("setup-login-update-status", "children"),
+    Input("setup-update-login-btn", "n_clicks"),
+    State("setup-auth-username", "value"),
+    State("setup-auth-current-pw", "value"),
+    State("setup-auth-new-pw", "value"),
+    State("setup-auth-confirm-pw", "value"),
+    prevent_initial_call=True,
+)
+def update_login_credentials(n_clicks, username, current_pw, new_pw, confirm_pw):
+    if not n_clicks:
+        return no_update
+
+    if not username or not username.strip():
+        return html.Span(
+            "Username is required.",
+            style={"color": COLORS["warning"], "fontSize": "0.85rem"},
+        )
+
+    if not new_pw:
+        return html.Span(
+            "New password is required.",
+            style={"color": COLORS["warning"], "fontSize": "0.85rem"},
+        )
+
+    if new_pw != confirm_pw:
+        return html.Span(
+            [html.I(className="bi bi-x-circle-fill", style={"marginRight": "6px"}), "New passwords do not match."],
+            style={"color": COLORS["danger"], "fontSize": "0.85rem"},
+        )
+
+    if len(new_pw) < 4:
+        return html.Span(
+            "Password must be at least 4 characters.",
+            style={"color": COLORS["warning"], "fontSize": "0.85rem"},
+        )
+
+    # Verify current password (DB credentials or env-var defaults)
+    stored_user = db.get_setting("auth_username")
+    if stored_user:
+        # DB credentials exist — verify current password against hash
+        result = db.verify_auth_credentials(stored_user, current_pw or "")
+        if not result:
+            return html.Span(
+                [html.I(className="bi bi-x-circle-fill", style={"marginRight": "6px"}), "Current password is incorrect."],
+                style={"color": COLORS["danger"], "fontSize": "0.85rem"},
+            )
+    else:
+        # No DB credentials yet — verify against env-var defaults
+        env_user = os.getenv("AUTH_USERNAME", "matrix")
+        env_pass = os.getenv("AUTH_PASSWORD", "morpheus")
+        if (current_pw or "") != env_pass:
+            return html.Span(
+                [html.I(className="bi bi-x-circle-fill", style={"marginRight": "6px"}), "Current password is incorrect."],
+                style={"color": COLORS["danger"], "fontSize": "0.85rem"},
+            )
+
+    # Save new credentials
+    db.save_auth_credentials(username.strip(), new_pw)
+
+    return html.Span(
+        [html.I(className="bi bi-check-circle-fill", style={"marginRight": "6px"}),
+         "Login credentials updated. Clear browser cache or open a new private window to use the new credentials."],
+        style={"color": COLORS["success"], "fontSize": "0.85rem"},
+    )
