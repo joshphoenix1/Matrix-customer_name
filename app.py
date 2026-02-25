@@ -115,4 +115,6 @@ app.index_string = """<!DOCTYPE html>
 # ── Run ──
 if __name__ == "__main__":
     port = int(os.getenv("APP_PORT", "5003"))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    # Bind to localhost when behind Nginx, 0.0.0.0 otherwise
+    host = "127.0.0.1" if os.path.exists("/etc/nginx/sites-enabled/matrix-ai") else "0.0.0.0"
+    app.run(host=host, port=port, debug=False)

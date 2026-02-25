@@ -1,12 +1,12 @@
 """
-Setup page — company info, API key, IMAP email connection, user preferences.
+Setup page — company info, IMAP email connection, user preferences, dashboard login.
 """
 
 import os
 import dash
 from dash import html, dcc, callback, Input, Output, State, no_update
 import dash_bootstrap_components as dbc
-from config import COLORS, ANTHROPIC_API_KEY
+from config import COLORS
 import db
 
 dash.register_page(__name__, path="/setup", name="Setup", order=9)
@@ -60,13 +60,6 @@ INDUSTRY_OPTIONS = [
 ]
 
 
-def _mask_key(key):
-    """Show first 10 and last 4 chars of an API key, mask the rest."""
-    if not key or len(key) < 20:
-        return key or ""
-    return key[:10] + "*" * (len(key) - 14) + key[-4:]
-
-
 def layout():
     # Load saved settings
     imap_server = db.get_setting("imap_server", "imap.gmail.com")
@@ -76,9 +69,6 @@ def layout():
     industry = db.get_setting("industry", "")
     user_name = db.get_setting("user_name", "")
     user_role = db.get_setting("user_role", "")
-    # API key: check DB first, then .env
-    api_key = db.get_setting("anthropic_api_key") or ANTHROPIC_API_KEY
-    has_key = bool(api_key)
 
     return html.Div(
         children=[
@@ -122,78 +112,6 @@ def layout():
                                 value=industry or None,
                                 placeholder="Select your industry...",
                             ),
-                        ],
-                    ),
-                ],
-            ),
-            # Anthropic API Key
-            html.Div(
-                style={
-                    "background": COLORS["card_bg"],
-                    "borderRadius": "12px",
-                    "padding": "24px",
-                    "marginBottom": "20px",
-                    "borderLeft": f"4px solid {COLORS['warning']}",
-                },
-                children=[
-                    html.H4(
-                        [
-                            html.I(className="bi bi-key-fill", style={"marginRight": "10px"}),
-                            "Anthropic API Key",
-                        ],
-                        style={"color": COLORS["text_primary"], "marginBottom": "8px"},
-                    ),
-                    html.P(
-                        [
-                            "Your API key powers the AI assistant. Get one from ",
-                            html.A(
-                                "console.anthropic.com",
-                                href="https://console.anthropic.com",
-                                target="_blank",
-                                style={"color": COLORS["accent"], "textDecoration": "underline"},
-                            ),
-                            ".",
-                        ],
-                        style={"color": COLORS["text_muted"], "fontSize": "0.85rem", "marginBottom": "12px"},
-                    ),
-                    # Status badge
-                    html.Div(
-                        style={"marginBottom": "12px"},
-                        children=[
-                            html.Span(
-                                [
-                                    html.I(className="bi bi-check-circle-fill", style={"marginRight": "6px"}),
-                                    f"Key configured: {_mask_key(api_key)}",
-                                ],
-                                style={"color": COLORS["success"], "fontSize": "0.82rem"},
-                            ) if has_key else html.Span(
-                                [
-                                    html.I(className="bi bi-exclamation-triangle-fill", style={"marginRight": "6px"}),
-                                    "No API key configured — AI features are disabled.",
-                                ],
-                                style={"color": COLORS["warning"], "fontSize": "0.82rem"},
-                            ),
-                        ],
-                    ),
-                    _input_field(
-                        "API Key" if not has_key else "Update API Key",
-                        "setup-api-key",
-                        "sk-ant-api03-...",
-                        "",
-                        input_type="password",
-                    ),
-                    html.Div(
-                        style={"display": "flex", "gap": "8px", "alignItems": "center"},
-                        children=[
-                            dbc.Button(
-                                [html.I(className="bi bi-shield-check", style={"marginRight": "6px"}), "Test Key"],
-                                id="setup-test-api-btn",
-                                size="sm",
-                                outline=True,
-                                color="warning",
-                                style={"marginTop": "4px"},
-                            ),
-                            html.Div(id="setup-api-test-result", style={"marginTop": "8px"}),
                         ],
                     ),
                 ],
@@ -310,7 +228,6 @@ def layout():
 @callback(
     Output("setup-save-status", "children"),
     Input("setup-save-btn", "n_clicks"),
-    State("setup-api-key", "value"),
     State("setup-company-name", "value"),
     State("setup-industry", "value"),
     State("setup-imap-server", "value"),
@@ -320,16 +237,9 @@ def layout():
     State("setup-user-role", "value"),
     prevent_initial_call=True,
 )
-def complete_setup(n_clicks, api_key, company_name, industry, imap_server, imap_email, imap_password, user_name, user_role):
+def complete_setup(n_clicks, company_name, industry, imap_server, imap_email, imap_password, user_name, user_role):
     if not n_clicks:
         return no_update
-
-    # Save API key if a new one was entered
-    if api_key and api_key.strip().startswith("sk-"):
-        key = api_key.strip()
-        db.save_setting("anthropic_api_key", key)
-        # Also update .env for persistence across restarts
-        _update_env_file("ANTHROPIC_API_KEY", key)
 
     db.save_setting("company_name", company_name or "")
     db.save_setting("industry", industry or "")
@@ -343,63 +253,6 @@ def complete_setup(n_clicks, api_key, company_name, industry, imap_server, imap_
         "Settings saved.",
         style={"color": COLORS["success"], "fontSize": "0.9rem"},
     )
-
-
-def _update_env_file(key, value):
-    """Update or add a key=value pair in the .env file."""
-    from config import BASE_DIR
-    env_path = os.path.join(BASE_DIR, ".env")
-    lines = []
-    found = False
-    if os.path.exists(env_path):
-        with open(env_path, "r") as f:
-            for line in f:
-                if line.strip().startswith(f"{key}="):
-                    lines.append(f"{key}={value}\n")
-                    found = True
-                else:
-                    lines.append(line)
-    if not found:
-        lines.append(f"{key}={value}\n")
-    with open(env_path, "w") as f:
-        f.writelines(lines)
-
-
-@callback(
-    Output("setup-api-test-result", "children"),
-    Input("setup-test-api-btn", "n_clicks"),
-    State("setup-api-key", "value"),
-    prevent_initial_call=True,
-)
-def test_api_key(n_clicks, new_key):
-    if not n_clicks:
-        return no_update
-
-    # Use the entered key if provided, otherwise the saved one
-    key = (new_key.strip() if new_key and new_key.strip() else None) or db.get_setting("anthropic_api_key") or ANTHROPIC_API_KEY
-    if not key:
-        return html.Span(
-            "No API key entered or saved.",
-            style={"color": COLORS["warning"], "fontSize": "0.85rem"},
-        )
-
-    try:
-        from anthropic import Anthropic
-        client = Anthropic(api_key=key)
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=16,
-            messages=[{"role": "user", "content": "Reply with exactly: OK"}],
-        )
-        return html.Span(
-            [html.I(className="bi bi-check-circle-fill", style={"marginRight": "6px"}), "API key is valid."],
-            style={"color": COLORS["success"], "fontSize": "0.85rem"},
-        )
-    except Exception as e:
-        return html.Span(
-            [html.I(className="bi bi-x-circle-fill", style={"marginRight": "6px"}), f"Invalid: {str(e)[:80]}"],
-            style={"color": COLORS["danger"], "fontSize": "0.85rem"},
-        )
 
 
 @callback(

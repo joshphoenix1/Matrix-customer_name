@@ -9,13 +9,15 @@
 #     https://raw.githubusercontent.com/joshphoenix1/Matrix-customer_name/master/bootstrap.sh | \
 #     GITHUB_PAT="YOUR_PAT" bash
 #
-# FULLY AUTOMATED:
+# FULLY AUTOMATED (with HTTPS):
 #
 #   curl -sL -H "Authorization: token YOUR_PAT" \
 #     https://raw.githubusercontent.com/joshphoenix1/Matrix-customer_name/master/bootstrap.sh | \
 #     GITHUB_PAT="YOUR_PAT" \
 #     ANTHROPIC_API_KEY="sk-ant-..." \
 #     APP_PORT=5003 \
+#     DOMAIN_NAME="acme.matrixai.app" \
+#     CERT_EMAIL="admin@matrixai.app" \
 #     IMAP_EMAIL="you@gmail.com" \
 #     IMAP_PASSWORD="xxxx xxxx xxxx xxxx" \
 #     COMPANY_NAME="Acme Corp" \
@@ -68,6 +70,10 @@ if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
 
 # ── App ──
 APP_PORT=${APP_PORT:-5003}
+
+# ── HTTPS ──
+DOMAIN_NAME="${DOMAIN_NAME:-}"
+CERT_EMAIL="${CERT_EMAIL:-}"
 
 # ── Anthropic API ──
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"
