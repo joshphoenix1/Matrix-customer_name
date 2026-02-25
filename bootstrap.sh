@@ -18,9 +18,6 @@
 #     APP_PORT=5003 \
 #     DOMAIN_NAME="acme.matrixai.app" \
 #     SSL_CERT_BUCKET="s3://matrix-ai-certs/wildcard" \
-#     IMAP_EMAIL="you@gmail.com" \
-#     IMAP_PASSWORD="xxxx xxxx xxxx xxxx" \
-#     COMPANY_NAME="Acme Corp" \
 #     bash
 #
 # NOTE: Requires an IAM role on the EC2 with:
@@ -120,17 +117,6 @@ SSL_CERT_BUCKET="${SSL_CERT_BUCKET:-}"
 
 # ── Anthropic API ──
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"
-
-# ── IMAP Email ──
-IMAP_SERVER="${IMAP_SERVER:-imap.gmail.com}"
-IMAP_EMAIL="${IMAP_EMAIL:-}"
-IMAP_PASSWORD="${IMAP_PASSWORD:-}"
-
-# ── Customer Branding ──
-COMPANY_NAME="${COMPANY_NAME:-}"
-USER_NAME="${USER_NAME:-}"
-USER_ROLE="${USER_ROLE:-}"
-INDUSTRY="${INDUSTRY:-}"
 CONFEOF
     echo "  deploy.conf written"
 fi

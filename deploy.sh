@@ -105,35 +105,8 @@ echo "[6/$TOTAL_STEPS] Initializing database..."
 python3 -c "
 import db
 db.init_db()
-
-# IMAP settings
-imap_server   = '''${IMAP_SERVER:-}'''
-imap_email    = '''${IMAP_EMAIL:-}'''
-imap_password = '''${IMAP_PASSWORD:-}'''
-if imap_email:
-    db.save_setting('imap_server', imap_server or 'imap.gmail.com')
-    db.save_setting('imap_email', imap_email)
-    db.save_setting('imap_password', imap_password)
-    print(f'  IMAP: {imap_email}')
-else:
-    print('  IMAP: skipped (configure in /setup)')
-
-# Branding
-company   = '''${COMPANY_NAME:-}'''
-user_name = '''${USER_NAME:-}'''
-user_role = '''${USER_ROLE:-}'''
-industry  = '''${INDUSTRY:-}'''
-if company:
-    db.save_setting('company_name', company)
-    print(f'  Company: {company}')
-if user_name:
-    db.save_setting('user_name', user_name)
-if user_role:
-    db.save_setting('user_role', user_role)
-if industry:
-    db.save_setting('industry', industry)
 "
-echo "  OK — database ready"
+echo "  OK — database ready (user configures company/branding via /setup)"
 
 # ══════════════════════════════════════════════════════════════
 # Step 7: systemd service (survives reboots)

@@ -311,12 +311,6 @@ app.layout = html.Div(
   APP_PORT=5003 \\
   DOMAIN_NAME="acme.matrixai.app" \\
   SSL_CERT_BUCKET="s3://matrix-ai-certs/wildcard" \\
-  IMAP_EMAIL="client@gmail.com" \\
-  IMAP_PASSWORD="xxxx xxxx xxxx xxxx" \\
-  COMPANY_NAME="Acme Corp" \\
-  USER_NAME="Jane Doe" \\
-  USER_ROLE="CEO" \\
-  INDUSTRY="Technology / SaaS" \\
   bash'''),
                     html.H5("What this does:", style={"color": COLORS["text_primary"], "marginTop": "16px", "marginBottom": "8px"}),
                     html.Ol([
@@ -328,7 +322,7 @@ app.layout = html.Div(
                     ]),
                     html.Div(
                         [html.I(className="bi bi-info-circle-fill", style={"marginRight": "8px"}),
-                         "All parameters except GITHUB_PAT and ANTHROPIC_API_KEY are optional. Missing values can be configured later from the /setup page."],
+                         "All parameters except GITHUB_PAT and ANTHROPIC_API_KEY are optional. The customer configures company info, email, and login from the /setup page after deployment."],
                         style={
                             "background": "rgba(9,132,227,0.1)",
                             "border": f"1px solid {COLORS['info']}",
@@ -351,7 +345,7 @@ cd ~/matrix-ai
 
 # 2. Edit the config
 nano deploy.conf
-# Fill in: ANTHROPIC_API_KEY, DOMAIN_NAME, SSL_CERT_BUCKET, etc.
+# Fill in: ANTHROPIC_API_KEY, DOMAIN_NAME, SSL_CERT_BUCKET
 
 # 3. Deploy
 ./deploy.sh'''),
@@ -415,15 +409,14 @@ nano deploy.conf
                         result="Directories created",
                     ),
 
-                    _step(6, "Initialize Database + Seed Settings",
-                        "Creates all 11 SQLite tables and seeds any configuration values you passed as env vars.",
+                    _step(6, "Initialize Database",
+                        "Creates all 11 SQLite tables. The database starts clean — no user data is seeded during deployment.",
                         details=[
                             "Runs db.init_db() which creates: conversations, messages, tasks, meetings, meeting_action_items, emails, documents, clients, deals, settings, invoices, revenue_entries",
-                            "Saves IMAP credentials to the settings table (if provided)",
-                            "Saves company name, user name, user role, industry (if provided)",
-                            "Any missing values can be configured later from the /setup page",
+                            "No user data, branding, or email settings are pre-populated",
+                            "The customer configures everything from the /setup page after first login",
                         ],
-                        result="Database initialized with 11 tables",
+                        result="Database initialized with 11 tables (empty settings)",
                     ),
 
                     _step(7, "Configure systemd Service",
@@ -509,8 +502,7 @@ nano deploy.conf
                                          │
                                          ├── HTTP Basic Auth (checks DB hash)
                                          ├── SQLite database (data/m8trx.db)
-                                         ├── Anthropic API (Claude AI)
-                                         └── IMAP email ingestion
+                                         └── Anthropic API (Claude AI)
 
 
     S3 Bucket (wildcard cert) ──[ daily cron ]──> /etc/ssl/matrix-ai/
@@ -590,8 +582,8 @@ sudo tail -50 /var/log/nginx/error.log'''),
                     html.Ol([
                         html.Li("Log in with the default credentials (matrix / morpheus)", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
                         html.Li("Go to /setup and set their own username + password in the Dashboard Login section", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
-                        html.Li("Configure IMAP email if not done during deploy", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
                         html.Li("Set company name, their name, and role for AI personalization", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
+                        html.Li("Configure IMAP email connection for email scanning", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
                     ]),
                 ], section_id="after"),
 
@@ -634,7 +626,6 @@ curl -sL -H "Authorization: token $PAT" \\
   ANTHROPIC_API_KEY="sk-ant-..." \\
   DOMAIN_NAME="acme.matrixai.app" \\
   SSL_CERT_BUCKET="s3://matrix-ai-certs/wildcard" \\
-  COMPANY_NAME="Acme Corp" \\
   bash
 
 # 3. Note the Elastic IP printed by bootstrap
