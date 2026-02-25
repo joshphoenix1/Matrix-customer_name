@@ -17,14 +17,15 @@
 #     ANTHROPIC_API_KEY="sk-ant-..." \
 #     APP_PORT=5003 \
 #     DOMAIN_NAME="acme.matrixai.app" \
-#     CERT_EMAIL="admin@matrixai.app" \
+#     SSL_CERT_BUCKET="s3://matrix-ai-certs/wildcard" \
 #     IMAP_EMAIL="you@gmail.com" \
 #     IMAP_PASSWORD="xxxx xxxx xxxx xxxx" \
 #     COMPANY_NAME="Acme Corp" \
 #     bash
 #
-# NOTE: Elastic IP allocation requires an IAM role on the EC2 with:
+# NOTE: Requires an IAM role on the EC2 with:
 #   ec2:AllocateAddress, ec2:AssociateAddress, ec2:DescribeAddresses
+#   s3:GetObject on the SSL_CERT_BUCKET
 #
 # ══════════════════════════════════════════════════════════════
 set -euo pipefail
@@ -113,9 +114,9 @@ if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
 # ── App ──
 APP_PORT=${APP_PORT:-5003}
 
-# ── HTTPS ──
+# ── HTTPS (wildcard cert from S3) ──
 DOMAIN_NAME="${DOMAIN_NAME:-}"
-CERT_EMAIL="${CERT_EMAIL:-}"
+SSL_CERT_BUCKET="${SSL_CERT_BUCKET:-}"
 
 # ── Anthropic API ──
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"

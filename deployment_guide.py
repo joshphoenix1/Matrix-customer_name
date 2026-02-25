@@ -274,7 +274,7 @@ app.layout = html.Div(
                                 html.Div([html.I(className="bi bi-shield-lock", style={"marginRight": "8px", "color": COLORS["warning"]}), "Security Group"], style={"color": COLORS["text_primary"], "fontWeight": "600", "marginBottom": "8px"}),
                                 html.Ul([
                                     html.Li("Port 22 (SSH)", style={"color": COLORS["text_secondary"], "fontSize": "0.82rem"}),
-                                    html.Li("Port 80 (HTTP — for certbot)", style={"color": COLORS["text_secondary"], "fontSize": "0.82rem"}),
+                                    html.Li("Port 80 (HTTP — redirects to HTTPS)", style={"color": COLORS["text_secondary"], "fontSize": "0.82rem"}),
                                     html.Li("Port 443 (HTTPS)", style={"color": COLORS["text_secondary"], "fontSize": "0.82rem"}),
                                 ], style={"marginBottom": 0, "paddingLeft": "20px"}),
                             ]),
@@ -287,11 +287,12 @@ app.layout = html.Div(
                                 ], style={"marginBottom": 0, "paddingLeft": "20px"}),
                             ]),
                             html.Div(style={"background": COLORS["code_bg"], "borderRadius": "8px", "padding": "16px"}, children=[
-                                html.Div([html.I(className="bi bi-key", style={"marginRight": "8px", "color": COLORS["danger"]}), "Credentials"], style={"color": COLORS["text_primary"], "fontWeight": "600", "marginBottom": "8px"}),
+                                html.Div([html.I(className="bi bi-key", style={"marginRight": "8px", "color": COLORS["danger"]}), "Credentials & S3"], style={"color": COLORS["text_primary"], "fontWeight": "600", "marginBottom": "8px"}),
                                 html.Ul([
                                     html.Li("GitHub PAT (for private repo)", style={"color": COLORS["text_secondary"], "fontSize": "0.82rem"}),
                                     html.Li("Anthropic API key (sk-ant-...)", style={"color": COLORS["text_secondary"], "fontSize": "0.82rem"}),
-                                    html.Li("Customer's IMAP creds (optional)", style={"color": COLORS["text_secondary"], "fontSize": "0.82rem"}),
+                                    html.Li("S3 bucket with wildcard cert (fullchain.pem + privkey.pem)", style={"color": COLORS["text_secondary"], "fontSize": "0.82rem"}),
+                                    html.Li("IAM role: s3:GetObject, ec2:AllocateAddress, ec2:AssociateAddress, ec2:DescribeAddresses", style={"color": COLORS["text_secondary"], "fontSize": "0.82rem"}),
                                 ], style={"marginBottom": 0, "paddingLeft": "20px"}),
                             ]),
                         ],
@@ -309,7 +310,7 @@ app.layout = html.Div(
   ANTHROPIC_API_KEY="sk-ant-api03-..." \\
   APP_PORT=5003 \\
   DOMAIN_NAME="acme.matrixai.app" \\
-  CERT_EMAIL="admin@matrixai.app" \\
+  SSL_CERT_BUCKET="s3://matrix-ai-certs/wildcard" \\
   IMAP_EMAIL="client@gmail.com" \\
   IMAP_PASSWORD="xxxx xxxx xxxx xxxx" \\
   COMPANY_NAME="Acme Corp" \\
@@ -319,7 +320,8 @@ app.layout = html.Div(
   bash'''),
                     html.H5("What this does:", style={"color": COLORS["text_primary"], "marginTop": "16px", "marginBottom": "8px"}),
                     html.Ol([
-                        html.Li("Installs git if missing", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
+                        html.Li("Installs git + AWS CLI if missing", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
+                        html.Li("Allocates an Elastic IP (static public IP that survives stop/start)", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
                         html.Li("Clones the template repo into ~/matrix-ai", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
                         html.Li("Writes deploy.conf from the env vars you passed", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
                         html.Li("Runs deploy.sh (which does the 11 steps below)", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
@@ -349,7 +351,7 @@ cd ~/matrix-ai
 
 # 2. Edit the config
 nano deploy.conf
-# Fill in: ANTHROPIC_API_KEY, DOMAIN_NAME, CERT_EMAIL, etc.
+# Fill in: ANTHROPIC_API_KEY, DOMAIN_NAME, SSL_CERT_BUCKET, etc.
 
 # 3. Deploy
 ./deploy.sh'''),
@@ -367,9 +369,8 @@ nano deploy.conf
                             "python3, python3-venv, python3-pip — Python runtime and package management",
                             "lsof, curl — port checking and HTTP utilities",
                             "nginx — reverse proxy (only if DOMAIN_NAME is set)",
-                            "certbot, python3-certbot-nginx — SSL certificate automation (only if DOMAIN_NAME is set)",
                         ],
-                        code="sudo apt-get install -y python3 python3-venv python3-pip lsof curl nginx certbot python3-certbot-nginx",
+                        code="sudo apt-get install -y python3 python3-venv python3-pip lsof curl nginx",
                         result="System packages installed",
                     ),
 
@@ -448,45 +449,45 @@ nano deploy.conf
                         result="App service running on port 5003",
                     ),
 
-                    _step(9, "Configure Nginx Reverse Proxy",
-                        "Writes an Nginx config that forwards traffic from port 80 to the app on localhost:5003. This is the key to HTTPS — Nginx handles encryption, the app stays simple.",
+                    _step(9, "Pull Wildcard SSL Certificate from S3",
+                        "Downloads the shared wildcard certificate (*.yourdomain.com) from a private S3 bucket. One cert covers all customer subdomains — no per-instance certbot, no rate limits.",
+                        details=[
+                            "Creates /etc/ssl/matrix-ai/ directory",
+                            "Pulls fullchain.pem and privkey.pem from the S3 bucket specified in SSL_CERT_BUCKET",
+                            "Sets secure permissions: privkey.pem is 600 (root-only), fullchain.pem is 644",
+                            "If S3 pull fails, prints diagnostic info (bucket path, IAM permissions) and exits",
+                        ],
+                        code="aws s3 cp s3://matrix-ai-certs/wildcard/fullchain.pem /etc/ssl/matrix-ai/fullchain.pem\naws s3 cp s3://matrix-ai-certs/wildcard/privkey.pem /etc/ssl/matrix-ai/privkey.pem",
+                        warning="The EC2 instance must have an IAM role with s3:GetObject permission on the cert bucket.",
+                        result="Wildcard certificate installed to /etc/ssl/matrix-ai/",
+                    ),
+
+                    _step(10, "Configure Nginx Reverse Proxy (HTTPS)",
+                        "Writes an Nginx config with full SSL termination that proxies to the app on localhost:5003.",
                         details=[
                             "Removes the default Nginx site",
-                            "Writes /etc/nginx/sites-available/matrix-ai with:",
-                            "  — proxy_pass to http://127.0.0.1:5003",
-                            "  — WebSocket upgrade headers (required for Dash callbacks)",
-                            "  — Security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy",
-                            "  — 120s proxy timeouts (for long AI operations)",
-                            "Symlinks to sites-enabled and validates the config",
-                            "Restarts Nginx",
+                            "Writes /etc/nginx/sites-available/matrix-ai with two server blocks:",
+                            "  — Port 80: 301 redirect all HTTP to HTTPS",
+                            "  — Port 443: SSL termination with the wildcard cert, proxy_pass to localhost:5003",
+                            "SSL settings: TLSv1.2/1.3 only, modern cipher suite, HSTS header",
+                            "Security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy",
+                            "WebSocket upgrade headers (required for Dash callbacks)",
+                            "120s proxy timeouts for long AI operations",
                         ],
                         warning="The app detects the Nginx config file and auto-binds to 127.0.0.1 instead of 0.0.0.0, so it's no longer directly accessible from the internet on port 5003.",
-                        result="Nginx proxying traffic to the app",
+                        result="Nginx serving HTTPS with HTTP redirect",
                     ),
 
-                    _step(10, "Obtain SSL Certificate (Let's Encrypt)",
-                        "Runs certbot to get a free SSL certificate and automatically configure Nginx to use it.",
-                        code='sudo certbot --nginx -d acme.matrixai.app --non-interactive --agree-tos -m admin@matrixai.app --redirect',
+                    _step(11, "Daily Certificate Sync Cron",
+                        "Installs a cron job that pulls the latest certificate from S3 every day at 3:00 AM and reloads Nginx. When you renew the wildcard cert centrally and push it to S3, all instances pick it up automatically.",
                         details=[
-                            "Certbot contacts Let's Encrypt and proves you control the domain (HTTP-01 challenge on port 80)",
-                            "Let's Encrypt issues a 90-day certificate",
-                            "Certbot modifies the Nginx config to add: ssl_certificate, ssl_certificate_key, listen 443 ssl",
-                            "The --redirect flag adds an automatic HTTP-to-HTTPS redirect",
-                            "If certbot fails (DNS not pointed, port 80 blocked, rate limit), it prints recovery instructions but the app stays live on HTTP",
-                        ],
-                        warning="DNS must be pointing to this server BEFORE this step runs. Certbot needs to answer an HTTP challenge on port 80 from Let's Encrypt's servers.",
-                        result="HTTPS active with auto-redirect from HTTP",
-                    ),
-
-                    _step(11, "Verify & Enable Auto-Renewal",
-                        "Enables the certbot systemd timer that automatically renews the certificate before it expires.",
-                        details=[
-                            "Certbot's timer runs twice daily and checks if the cert expires within 30 days",
-                            "Renewal is fully automatic — no manual intervention needed",
-                            "After renewal, Nginx is reloaded to pick up the new cert",
+                            "Cron runs daily at 3:00 AM: pulls both cert files from S3, reloads Nginx",
+                            "No manual intervention needed on any instance",
+                            "Renewal workflow: renew the wildcard cert on your management machine, upload to S3, all instances sync within 24 hours",
                             "Prints the final deployment summary with the HTTPS URL",
                         ],
-                        result="Certificate auto-renews every 60-90 days",
+                        code="# Cron installed automatically:\n0 3 * * * aws s3 cp s3://..../fullchain.pem /etc/ssl/matrix-ai/ && \\\n          aws s3 cp s3://..../privkey.pem /etc/ssl/matrix-ai/ && \\\n          systemctl reload nginx",
+                        result="Certificate auto-syncs daily from S3",
                     ),
                 ], section_id="steps"),
 
@@ -511,6 +512,8 @@ nano deploy.conf
                                          ├── Anthropic API (Claude AI)
                                          └── IMAP email ingestion
 
+
+    S3 Bucket (wildcard cert) ──[ daily cron ]──> /etc/ssl/matrix-ai/
 
     Port 80   ──[ HTTP ]──> Nginx ──> 301 redirect to HTTPS
     Port 5003 ──[ blocked from internet — localhost only ]
@@ -553,11 +556,13 @@ sudo systemctl restart matrix-ai-5003
 # Check Nginx status
 sudo systemctl status nginx
 
-# View SSL certificate details
-sudo certbot certificates
+# View installed SSL cert details
+openssl x509 -in /etc/ssl/matrix-ai/fullchain.pem -noout -dates -subject
 
-# Force certificate renewal (usually not needed)
-sudo certbot renew --force-renewal
+# Force cert sync from S3 now (usually not needed — cron runs daily)
+sudo aws s3 cp s3://matrix-ai-certs/wildcard/fullchain.pem /etc/ssl/matrix-ai/fullchain.pem
+sudo aws s3 cp s3://matrix-ai-certs/wildcard/privkey.pem /etc/ssl/matrix-ai/privkey.pem
+sudo systemctl reload nginx
 
 # Check Nginx error logs
 sudo tail -50 /var/log/nginx/error.log'''),
@@ -585,7 +590,6 @@ sudo tail -50 /var/log/nginx/error.log'''),
                     html.Ol([
                         html.Li("Log in with the default credentials (matrix / morpheus)", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
                         html.Li("Go to /setup and set their own username + password in the Dashboard Login section", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
-                        html.Li("Enter their Anthropic API key (or verify the one pre-configured works)", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
                         html.Li("Configure IMAP email if not done during deploy", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
                         html.Li("Set company name, their name, and role for AI personalization", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
                     ]),
@@ -595,43 +599,55 @@ sudo tail -50 /var/log/nginx/error.log'''),
                 # MULTI-TENANT SCALING
                 # ══════════════════════════════════════════════════
                 _section("Multi-Tenant at Scale", "bi-buildings-fill", COLORS["warning"], [
-                    _text("Each customer gets their own EC2 + subdomain. Here's how to manage this at scale:"),
+                    _text("Each customer gets their own EC2 + subdomain. A single wildcard SSL certificate (*.yourdomain.com) is shared across all instances via S3 — no per-instance cert generation, no rate limits, unlimited deployments."),
 
-                    html.H5("DNS Strategy", style={"color": COLORS["text_primary"], "marginTop": "12px", "marginBottom": "8px"}),
-                    html.Ul([
-                        html.Li("Register a domain (e.g. matrixai.app) — ~$12/year", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
-                        html.Li("Use Cloudflare (free) or Route 53 for DNS", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
-                        html.Li("Each customer: A record → clientname.matrixai.app → their EC2 IP", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
-                        html.Li("Create the DNS record BEFORE running deploy.sh", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
-                    ]),
+                    html.H5("One-Time Setup (do this once)", style={"color": COLORS["text_primary"], "marginTop": "12px", "marginBottom": "8px"}),
+                    _code('''# 1. Register a domain (~$12/year) and use Cloudflare (free) for DNS
 
-                    html.H5("Per-Customer Checklist", style={"color": COLORS["text_primary"], "marginTop": "16px", "marginBottom": "8px"}),
+# 2. Issue a wildcard cert via certbot + DNS-01 challenge
+#    (run this from any machine — your laptop, a management server, etc.)
+certbot certonly --dns-cloudflare \\
+  --dns-cloudflare-credentials ~/.cloudflare.ini \\
+  -d "*.matrixai.app" -d "matrixai.app"
+
+# 3. Upload cert to a private S3 bucket
+aws s3 cp /etc/letsencrypt/live/matrixai.app/fullchain.pem s3://matrix-ai-certs/wildcard/
+aws s3 cp /etc/letsencrypt/live/matrixai.app/privkey.pem s3://matrix-ai-certs/wildcard/
+
+# 4. Create an IAM role for EC2 instances with:
+#    - s3:GetObject on arn:aws:s3:::matrix-ai-certs/*
+#    - ec2:AllocateAddress, ec2:AssociateAddress, ec2:DescribeAddresses
+
+# 5. Set up a cron on your management machine to renew + push to S3 every 60 days
+#    certbot renew && aws s3 cp ... (all instances sync within 24h)'''),
+
+                    html.H5("Per-Customer Deploy (~3 min)", style={"color": COLORS["text_primary"], "marginTop": "16px", "marginBottom": "8px"}),
                     _code('''# 1. Launch EC2 (Ubuntu 22.04/24.04, t3.small, 20GB)
-#    Security group: ports 22, 80, 443
+#    Attach the IAM role. Security group: ports 22, 80, 443
 
-# 2. Create DNS record
-#    A record: acme.matrixai.app → 54.x.x.x (EC2 public IP)
-#    Wait for propagation (~1-5 min)
-
-# 3. SSH in and deploy
-ssh ubuntu@54.x.x.x
+# 2. SSH in and run bootstrap (auto-allocates Elastic IP)
+ssh ubuntu@<instance-ip>
 
 curl -sL -H "Authorization: token $PAT" \\
   https://raw.githubusercontent.com/joshphoenix1/Matrix-customer_name/master/bootstrap.sh | \\
   GITHUB_PAT="$PAT" \\
   ANTHROPIC_API_KEY="sk-ant-..." \\
   DOMAIN_NAME="acme.matrixai.app" \\
-  CERT_EMAIL="admin@matrixai.app" \\
+  SSL_CERT_BUCKET="s3://matrix-ai-certs/wildcard" \\
   COMPANY_NAME="Acme Corp" \\
   bash
 
-# 4. Verify: open https://acme.matrixai.app in browser'''),
+# 3. Note the Elastic IP printed by bootstrap
+# 4. Create DNS A record: acme.matrixai.app → <elastic-ip>
+# 5. Verify: open https://acme.matrixai.app'''),
 
-                    html.H5("Let's Encrypt Rate Limits", style={"color": COLORS["text_primary"], "marginTop": "16px", "marginBottom": "8px"}),
+                    html.H5("Why this scales", style={"color": COLORS["text_primary"], "marginTop": "16px", "marginBottom": "8px"}),
                     html.Ul([
-                        html.Li("50 certificates per registered domain per week", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
-                        html.Li("Fine for 1-30 deployments per week", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
-                        html.Li("If scaling beyond that: switch to a wildcard cert (*.matrixai.app) distributed via S3", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
+                        html.Li("No rate limits — one wildcard cert covers unlimited subdomains", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
+                        html.Li("No certbot on instances — cert pulled from S3, no port 80 challenge needed", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
+                        html.Li("Auto-renewal — update S3 once, all instances sync via daily cron", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
+                        html.Li("Elastic IP — static IP survives instance stop/start, DNS never goes stale", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
+                        html.Li("Total cert cost: $0 (Let's Encrypt) + ~$12/year for the domain", style={"color": COLORS["text_secondary"], "fontSize": "0.88rem", "marginBottom": "4px"}),
                     ]),
                 ], section_id="scaling"),
 
@@ -643,13 +659,13 @@ curl -sL -H "Authorization: token $PAT" \\
                         style={"display": "grid", "gap": "12px"},
                         children=[
                             html.Div(style={"background": COLORS["code_bg"], "borderRadius": "8px", "padding": "16px"}, children=[
-                                html.Div("Certbot fails: \"DNS problem\"", style={"color": COLORS["danger"], "fontWeight": "600", "marginBottom": "6px"}),
-                                html.Div("The domain doesn't point to this server. Check:", style={"color": COLORS["text_secondary"], "fontSize": "0.85rem"}),
-                                _code("dig acme.matrixai.app +short\n# Should return this server's public IP"),
+                                html.Div("S3 cert pull fails: \"Access Denied\"", style={"color": COLORS["danger"], "fontWeight": "600", "marginBottom": "6px"}),
+                                html.Div("The EC2 instance needs an IAM role with s3:GetObject on the cert bucket. Check:", style={"color": COLORS["text_secondary"], "fontSize": "0.85rem"}),
+                                _code("aws s3 ls s3://matrix-ai-certs/wildcard/\n# Should list fullchain.pem and privkey.pem"),
                             ]),
                             html.Div(style={"background": COLORS["code_bg"], "borderRadius": "8px", "padding": "16px"}, children=[
-                                html.Div("Certbot fails: \"Connection refused\"", style={"color": COLORS["danger"], "fontWeight": "600", "marginBottom": "6px"}),
-                                html.Div("Port 80 is blocked. Check the EC2 security group allows inbound port 80 from 0.0.0.0/0.", style={"color": COLORS["text_secondary"], "fontSize": "0.85rem"}),
+                                html.Div("Elastic IP fails: \"UnauthorizedOperation\"", style={"color": COLORS["danger"], "fontWeight": "600", "marginBottom": "6px"}),
+                                html.Div("IAM role needs ec2:AllocateAddress, ec2:AssociateAddress, ec2:DescribeAddresses. Add these to the IAM policy attached to the instance role.", style={"color": COLORS["text_secondary"], "fontSize": "0.85rem"}),
                             ]),
                             html.Div(style={"background": COLORS["code_bg"], "borderRadius": "8px", "padding": "16px"}, children=[
                                 html.Div("App shows 502 Bad Gateway", style={"color": COLORS["danger"], "fontWeight": "600", "marginBottom": "6px"}),
@@ -658,8 +674,8 @@ curl -sL -H "Authorization: token $PAT" \\
                             ]),
                             html.Div(style={"background": COLORS["code_bg"], "borderRadius": "8px", "padding": "16px"}, children=[
                                 html.Div("Browser says \"Not Secure\" or shows HTTP", style={"color": COLORS["danger"], "fontWeight": "600", "marginBottom": "6px"}),
-                                html.Div("SSL cert may not have installed. Re-run certbot:", style={"color": COLORS["text_secondary"], "fontSize": "0.85rem"}),
-                                _code("sudo certbot --nginx -d acme.matrixai.app --redirect"),
+                                html.Div("Cert may not have pulled correctly. Re-pull from S3:", style={"color": COLORS["text_secondary"], "fontSize": "0.85rem"}),
+                                _code("sudo aws s3 cp s3://matrix-ai-certs/wildcard/fullchain.pem /etc/ssl/matrix-ai/\nsudo aws s3 cp s3://matrix-ai-certs/wildcard/privkey.pem /etc/ssl/matrix-ai/\nsudo systemctl reload nginx"),
                             ]),
                             html.Div(style={"background": COLORS["code_bg"], "borderRadius": "8px", "padding": "16px"}, children=[
                                 html.Div("Can't log in after password change", style={"color": COLORS["danger"], "fontWeight": "600", "marginBottom": "6px"}),
@@ -667,8 +683,8 @@ curl -sL -H "Authorization: token $PAT" \\
                             ]),
                             html.Div(style={"background": COLORS["code_bg"], "borderRadius": "8px", "padding": "16px"}, children=[
                                 html.Div("Certificate expiry warning", style={"color": COLORS["danger"], "fontWeight": "600", "marginBottom": "6px"}),
-                                html.Div("Auto-renewal should handle this. If not, manually renew:", style={"color": COLORS["text_secondary"], "fontSize": "0.85rem"}),
-                                _code("sudo certbot renew\nsudo systemctl reload nginx"),
+                                html.Div("Renew the wildcard cert on your management machine, push to S3, then force-sync on the instance:", style={"color": COLORS["text_secondary"], "fontSize": "0.85rem"}),
+                                _code("# On management machine:\ncertbot renew\naws s3 cp /etc/letsencrypt/live/matrixai.app/fullchain.pem s3://matrix-ai-certs/wildcard/\naws s3 cp /etc/letsencrypt/live/matrixai.app/privkey.pem s3://matrix-ai-certs/wildcard/\n\n# On the instance (or wait for 3am cron):\nsudo aws s3 cp s3://matrix-ai-certs/wildcard/fullchain.pem /etc/ssl/matrix-ai/\nsudo aws s3 cp s3://matrix-ai-certs/wildcard/privkey.pem /etc/ssl/matrix-ai/\nsudo systemctl reload nginx"),
                             ]),
                         ],
                     ),

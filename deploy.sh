@@ -8,7 +8,8 @@
 #   2. ./deploy.sh
 #
 # Or pass values inline (overrides deploy.conf):
-#   ANTHROPIC_API_KEY="sk-..." APP_PORT=5003 DOMAIN_NAME="acme.matrixai.app" ./deploy.sh
+#   ANTHROPIC_API_KEY="sk-..." DOMAIN_NAME="acme.matrixai.app" \
+#   SSL_CERT_BUCKET="s3://matrix-ai-certs/wildcard" ./deploy.sh
 #
 # ══════════════════════════════════════════════════════════════
 set -euo pipefail
@@ -28,7 +29,8 @@ APP_DIR="$SCRIPT_DIR"
 APP_USER="${SUDO_USER:-$(whoami)}"
 SERVICE_NAME="matrix-ai-${APP_PORT}"
 DOMAIN_NAME="${DOMAIN_NAME:-}"
-CERT_EMAIL="${CERT_EMAIL:-}"
+SSL_CERT_BUCKET="${SSL_CERT_BUCKET:-}"
+SSL_DIR="/etc/ssl/matrix-ai"
 
 # Determine total steps based on whether HTTPS is configured
 if [ -n "$DOMAIN_NAME" ]; then
@@ -54,8 +56,8 @@ echo "[1/$TOTAL_STEPS] Installing system dependencies..."
 sudo apt-get update -qq
 sudo apt-get install -y -qq python3 python3-venv python3-pip lsof curl > /dev/null 2>&1
 if [ -n "$DOMAIN_NAME" ]; then
-    sudo apt-get install -y -qq nginx certbot python3-certbot-nginx > /dev/null 2>&1
-    echo "  OK — python3 $(python3 --version 2>&1 | awk '{print $2}'), nginx, certbot"
+    sudo apt-get install -y -qq nginx > /dev/null 2>&1
+    echo "  OK — python3 $(python3 --version 2>&1 | awk '{print $2}'), nginx"
 else
     echo "  OK — python3 $(python3 --version 2>&1 | awk '{print $2}')"
 fi
@@ -187,23 +189,74 @@ fi
 echo "  OK — ${SERVICE_NAME} running"
 
 # ══════════════════════════════════════════════════════════════
-# Steps 9-11: HTTPS via Nginx + Let's Encrypt (if domain set)
+# Steps 9-11: HTTPS via Nginx + S3 wildcard cert (if domain set)
 # ══════════════════════════════════════════════════════════════
 if [ -n "$DOMAIN_NAME" ]; then
 
-    # ── Step 9: Nginx reverse proxy config ──
-    echo "[9/$TOTAL_STEPS] Configuring Nginx reverse proxy..."
+    # ── Step 9: Pull wildcard SSL cert from S3 ──
+    echo "[9/$TOTAL_STEPS] Pulling SSL certificate from S3..."
 
-    # Remove default site if it exists
+    if [ -z "$SSL_CERT_BUCKET" ]; then
+        echo ""
+        echo "  ERROR: DOMAIN_NAME is set but SSL_CERT_BUCKET is empty."
+        echo "  Set SSL_CERT_BUCKET in deploy.conf (e.g., s3://matrix-ai-certs/wildcard)"
+        echo "  The bucket must contain: fullchain.pem and privkey.pem"
+        echo ""
+        echo "  The app is running on HTTP at port ${APP_PORT} without HTTPS."
+        exit 1
+    fi
+
+    sudo mkdir -p "$SSL_DIR"
+
+    if aws s3 cp "${SSL_CERT_BUCKET}/fullchain.pem" "${SSL_DIR}/fullchain.pem" --quiet 2>/dev/null && \
+       aws s3 cp "${SSL_CERT_BUCKET}/privkey.pem" "${SSL_DIR}/privkey.pem" --quiet 2>/dev/null; then
+        sudo chmod 600 "${SSL_DIR}/privkey.pem"
+        sudo chmod 644 "${SSL_DIR}/fullchain.pem"
+        echo "  OK — certificate installed to ${SSL_DIR}/"
+    else
+        echo ""
+        echo "  ERROR: Could not pull cert from ${SSL_CERT_BUCKET}"
+        echo "  Check:"
+        echo "    - Bucket exists and contains fullchain.pem + privkey.pem"
+        echo "    - IAM role has s3:GetObject permission on the bucket"
+        echo ""
+        echo "  The app is running on HTTP at port ${APP_PORT} without HTTPS."
+        exit 1
+    fi
+
+    # ── Step 10: Nginx reverse proxy with SSL ──
+    echo "[10/$TOTAL_STEPS] Configuring Nginx reverse proxy (HTTPS)..."
+
+    # Remove default site
     sudo rm -f /etc/nginx/sites-enabled/default
 
     sudo tee /etc/nginx/sites-available/matrix-ai > /dev/null <<NGXEOF
-# Matrix AI Assistant — Nginx reverse proxy
-# Certbot will modify this file to add SSL directives.
+# Matrix AI Assistant — Nginx reverse proxy with SSL (wildcard cert)
 
+# Redirect HTTP to HTTPS
 server {
     listen 80;
     server_name ${DOMAIN_NAME};
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name ${DOMAIN_NAME};
+
+    # Wildcard SSL certificate (pulled from S3)
+    ssl_certificate     ${SSL_DIR}/fullchain.pem;
+    ssl_certificate_key ${SSL_DIR}/privkey.pem;
+
+    # Modern SSL settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # HSTS (tell browsers to always use HTTPS)
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
 
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -231,7 +284,7 @@ NGXEOF
 
     sudo ln -sf /etc/nginx/sites-available/matrix-ai /etc/nginx/sites-enabled/matrix-ai
 
-    # Validate config
+    # Validate and start
     if ! sudo nginx -t 2>/dev/null; then
         echo "  ERROR: Nginx config is invalid."
         sudo nginx -t
@@ -240,41 +293,17 @@ NGXEOF
 
     sudo systemctl enable nginx > /dev/null 2>&1
     sudo systemctl restart nginx
-    echo "  OK — Nginx configured for ${DOMAIN_NAME}"
+    echo "  OK — Nginx serving HTTPS for ${DOMAIN_NAME}"
 
-    # ── Step 10: SSL certificate via Let's Encrypt ──
-    echo "[10/$TOTAL_STEPS] Obtaining SSL certificate..."
+    # ── Step 11: Daily cert sync cron + verify ──
+    echo "[11/$TOTAL_STEPS] Setting up daily certificate sync..."
 
-    CERTBOT_ARGS="--nginx -d ${DOMAIN_NAME} --non-interactive --agree-tos"
-    if [ -n "$CERT_EMAIL" ]; then
-        CERTBOT_ARGS="$CERTBOT_ARGS -m ${CERT_EMAIL}"
-    else
-        CERTBOT_ARGS="$CERTBOT_ARGS --register-unsafely-without-email"
-    fi
+    # Cron job: pull latest cert from S3 daily at 3am and reload Nginx
+    CRON_CMD="0 3 * * * aws s3 cp ${SSL_CERT_BUCKET}/fullchain.pem ${SSL_DIR}/fullchain.pem --quiet && aws s3 cp ${SSL_CERT_BUCKET}/privkey.pem ${SSL_DIR}/privkey.pem --quiet && chmod 600 ${SSL_DIR}/privkey.pem && systemctl reload nginx"
 
-    # Redirect all HTTP to HTTPS
-    CERTBOT_ARGS="$CERTBOT_ARGS --redirect"
-
-    if sudo certbot $CERTBOT_ARGS; then
-        echo "  OK — SSL certificate installed"
-    else
-        echo ""
-        echo "  WARNING: Certbot failed. Common causes:"
-        echo "    - DNS for ${DOMAIN_NAME} does not point to this server"
-        echo "    - Port 80 is blocked by security group / firewall"
-        echo "    - Rate limit reached (try again later)"
-        echo ""
-        echo "  The app is still accessible via HTTP."
-        echo "  Fix the issue and run:  sudo certbot --nginx -d ${DOMAIN_NAME}"
-        echo ""
-    fi
-
-    # ── Step 11: Verify HTTPS ──
-    echo "[11/$TOTAL_STEPS] Verifying deployment..."
-
-    # Ensure certbot auto-renewal timer is active
-    sudo systemctl enable certbot.timer > /dev/null 2>&1 || true
-    sudo systemctl start certbot.timer > /dev/null 2>&1 || true
+    # Install cron (idempotent — removes old entry first)
+    (sudo crontab -l 2>/dev/null | grep -v "matrix-ai.*ssl" || true; echo "${CRON_CMD}  # matrix-ai ssl sync") | sudo crontab -
+    echo "  OK — daily cert sync at 3:00 AM"
 
     echo ""
     echo "  ╔══════════════════════════════════════════════════╗"
@@ -285,8 +314,8 @@ NGXEOF
     echo "  ║                                                  ║"
     echo "  ║  Service:  ${SERVICE_NAME}               "
     echo "  ║  Nginx:    sudo systemctl status nginx           ║"
-    echo "  ║  SSL:      sudo certbot certificates             ║"
-    echo "  ║  Renewal:  automatic (certbot.timer)             ║"
+    echo "  ║  SSL cert: ${SSL_DIR}/  "
+    echo "  ║  Renewal:  daily sync from S3 (3:00 AM cron)    ║"
     echo "  ║  Logs:     sudo journalctl -u ${SERVICE_NAME} -f "
     echo "  ║  Restart:  sudo systemctl restart ${SERVICE_NAME}"
     echo "  ║                                                  ║"
