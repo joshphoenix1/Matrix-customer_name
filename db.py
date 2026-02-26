@@ -131,6 +131,64 @@ CREATE TABLE IF NOT EXISTS revenue_entries (
     notes TEXT DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS persona_samples (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_type TEXT NOT NULL DEFAULT 'email',
+    content TEXT NOT NULL,
+    metadata TEXT DEFAULT '{}',
+    embedded_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS email_drafts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email_id INTEGER,
+    recipient TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending_review' CHECK (status IN ('pending_review', 'auto_approved', 'approved', 'sent', 'rejected')),
+    confidence_score REAL DEFAULT 0.0,
+    category TEXT DEFAULT '',
+    reasoning TEXT DEFAULT '',
+    original_body TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS sent_emails (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    draft_id INTEGER,
+    recipient TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    smtp_message_id TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'sent',
+    sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (draft_id) REFERENCES email_drafts(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS exclusion_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pattern TEXT NOT NULL UNIQUE,
+    reason TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS calendar_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    draft_id INTEGER,
+    google_event_id TEXT DEFAULT '',
+    recipient TEXT NOT NULL,
+    title TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    meet_link TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (draft_id) REFERENCES email_drafts(id) ON DELETE SET NULL
+);
 """
 
 
@@ -707,5 +765,221 @@ def get_meetings_for_date(date_str):
         rows = conn.execute(
             "SELECT * FROM meetings WHERE date = ? ORDER BY created_at ASC",
             (date_str,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ── Persona Samples ──
+
+def save_persona_sample(content, source_type="email", metadata="{}"):
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT INTO persona_samples (content, source_type, metadata) VALUES (?, ?, ?)",
+            (content, source_type, metadata),
+        )
+        return cur.lastrowid
+
+
+def get_persona_samples(source_type=None, limit=500):
+    with get_db() as conn:
+        if source_type:
+            rows = conn.execute(
+                "SELECT * FROM persona_samples WHERE source_type = ? ORDER BY created_at DESC LIMIT ?",
+                (source_type, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM persona_samples ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_persona_sample_count():
+    with get_db() as conn:
+        return conn.execute("SELECT COUNT(*) FROM persona_samples").fetchone()[0]
+
+
+def get_persona_sample_count_by_source():
+    """Returns dict of {source_type: count}."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT source_type, COUNT(*) as cnt FROM persona_samples GROUP BY source_type"
+        ).fetchall()
+        return {row["source_type"]: row["cnt"] for row in rows}
+
+
+def mark_sample_embedded(sample_id):
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE persona_samples SET embedded_at = datetime('now') WHERE id = ?",
+            (sample_id,),
+        )
+
+
+def get_unembedded_samples():
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM persona_samples WHERE embedded_at IS NULL ORDER BY created_at ASC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def clear_persona_samples():
+    with get_db() as conn:
+        conn.execute("DELETE FROM persona_samples")
+
+
+# ── Email Drafts ──
+
+def save_email_draft(email_id, recipient, subject, body, status="pending_review",
+                     confidence_score=0.0, category="", reasoning="", original_body=""):
+    with get_db() as conn:
+        cur = conn.execute(
+            """INSERT INTO email_drafts
+               (email_id, recipient, subject, body, status, confidence_score, category, reasoning, original_body)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (email_id, recipient, subject, body, status, confidence_score, category, reasoning, original_body),
+        )
+        return cur.lastrowid
+
+
+def get_email_drafts(status=None, limit=50):
+    with get_db() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM email_drafts WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+                (status, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM email_drafts ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_email_draft(draft_id):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM email_drafts WHERE id = ?", (draft_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def update_email_draft(draft_id, **kwargs):
+    with get_db() as conn:
+        allowed = {"body", "status", "confidence_score", "category", "reasoning"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if not updates:
+            return
+        updates["updated_at"] = datetime.now().isoformat()
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [draft_id]
+        conn.execute(f"UPDATE email_drafts SET {set_clause} WHERE id = ?", values)
+
+
+def get_pending_drafts_count():
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM email_drafts WHERE status IN ('pending_review', 'auto_approved', 'approved')"
+        ).fetchone()[0]
+
+
+# ── Sent Emails ──
+
+def save_sent_email(draft_id, recipient, subject, body, smtp_message_id="", status="sent"):
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT INTO sent_emails (draft_id, recipient, subject, body, smtp_message_id, status) VALUES (?, ?, ?, ?, ?, ?)",
+            (draft_id, recipient, subject, body, smtp_message_id, status),
+        )
+        return cur.lastrowid
+
+
+def get_sent_emails(limit=50):
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM sent_emails ORDER BY sent_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ── Exclusion Rules ──
+
+def add_exclusion(pattern, reason=""):
+    """Insert an exclusion pattern (email or @domain). Ignores duplicates."""
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO exclusion_rules (pattern, reason) VALUES (?, ?)",
+            (pattern.strip().lower(), reason),
+        )
+
+
+def remove_exclusion(exclusion_id):
+    """Delete an exclusion rule by id."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM exclusion_rules WHERE id = ?", (exclusion_id,))
+
+
+def get_exclusions():
+    """Return all exclusion rules ordered by newest first."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM exclusion_rules ORDER BY created_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_top_emailers(limit=5):
+    """Return top senders by email count, most frequent first."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT sender, COUNT(*) as cnt FROM emails GROUP BY sender ORDER BY cnt DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [{"sender": r["sender"], "count": r["cnt"]} for r in rows]
+
+
+def is_excluded(email_address):
+    """Check if an email address matches any exclusion pattern.
+    Supports exact match and @domain suffix match.
+    """
+    if not email_address:
+        return False
+    email_lower = email_address.strip().lower()
+    exclusions = get_exclusions()
+    for exc in exclusions:
+        pattern = exc["pattern"]
+        if pattern.startswith("@"):
+            # Domain match
+            if email_lower.endswith(pattern):
+                return True
+        else:
+            # Exact match
+            if email_lower == pattern:
+                return True
+    return False
+
+
+# ── Calendar Invites ──
+
+def save_calendar_invite(draft_id, recipient, title, start_time, end_time,
+                         google_event_id="", meet_link="", status="pending"):
+    with get_db() as conn:
+        cur = conn.execute(
+            """INSERT INTO calendar_invites
+               (draft_id, google_event_id, recipient, title, start_time, end_time, meet_link, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (draft_id, google_event_id, recipient, title, start_time, end_time, meet_link, status),
+        )
+        return cur.lastrowid
+
+
+def get_calendar_invites(limit=50):
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM calendar_invites ORDER BY created_at DESC LIMIT ?",
+            (limit,),
         ).fetchall()
         return [dict(r) for r in rows]

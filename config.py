@@ -10,6 +10,7 @@ load_dotenv()
 
 # ── Customer Branding ──
 COMPANY_NAME = "M8TRX.AI"
+APP_NAME = "CloneAI"
 AGENT_NAME = "Matrix AI Assistant"
 BRAND_COLOR = "#6C5CE7"
 
@@ -23,6 +24,8 @@ DB_PATH = os.path.join(BASE_DIR, "data", "m8trx.db")
 CACHE_DIR = os.path.join(BASE_DIR, "cache")
 PROMPTS_DIR = os.path.join(BASE_DIR, "prompts")
 UPLOADS_DIR = os.path.join(BASE_DIR, "data", "uploads")
+CHROMA_DIR = os.path.join(BASE_DIR, "data", "chroma")
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
 # ── Design System ──
 COLORS = {

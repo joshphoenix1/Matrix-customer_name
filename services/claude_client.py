@@ -6,8 +6,7 @@ meeting summarization, email processing, daily priorities.
 import json
 import os
 from datetime import date
-from anthropic import Anthropic
-from config import ANTHROPIC_API_KEY, ANTHROPIC_MODEL, PROMPTS_DIR, COMPANY_NAME
+from config import ANTHROPIC_MODEL, PROMPTS_DIR, COMPANY_NAME
 import db
 
 
@@ -44,11 +43,8 @@ def _build_system_prompt():
 
 
 def _get_client():
-    # Check DB override first, then fall back to config/.env
-    api_key = db.get_setting("anthropic_api_key") or ANTHROPIC_API_KEY
-    if not api_key:
-        return None
-    return Anthropic(api_key=api_key)
+    from services.claude_auth import get_claude_client
+    return get_claude_client()
 
 
 def chat(user_message, conversation_id):

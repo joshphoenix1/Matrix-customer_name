@@ -16,6 +16,10 @@ PAGE_ICONS = {
     "Emails": "bi bi-envelope-open-fill",
     "CRM": "bi bi-people-fill",
     "Finances": "bi bi-currency-dollar",
+    "Channels": "bi bi-diagram-3-fill",
+    "Rules": "bi bi-shield-check",
+    "Persona": "bi bi-person-bounding-box",
+    "Drafts": "bi bi-pencil-square",
     "Setup": "bi bi-gear-fill",
 }
 

@@ -206,6 +206,17 @@ def process_incoming_email(sender, subject, body):
         result["created_meeting_id"] = meeting_id
 
     result["email_id"] = email_id
+
+    # Trigger persona draft generation if auto-reply is enabled
+    try:
+        auto_reply = db.get_setting("persona_auto_reply_enabled", "false") == "true"
+        has_profile = db.get_setting("persona_profile") is not None
+        if auto_reply and has_profile:
+            from services.persona_engine import generate_reply_draft
+            generate_reply_draft(email_id)
+    except Exception as e:
+        print(f"Persona draft generation skipped for email {email_id}: {e}")
+
     return result
 
 
