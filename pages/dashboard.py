@@ -341,11 +341,14 @@ def update_kpis(*_):
     meetings_today = db.get_todays_meetings()
     emails = db.get_emails(limit=100)
 
+    pending_drafts = db.get_pending_drafts_count()
+
     return [
         kpi_card("Open Tasks", len(active), f"{len(all_tasks)} total", COLORS["accent"]),
         kpi_card("Due Today", len(due_today), "tasks due", COLORS["warning"]),
         kpi_card("Meetings Today", len(meetings_today), "scheduled", COLORS["info"]),
         kpi_card("Emails Processed", len(emails), "total received", COLORS["success"]),
+        kpi_card("Pending Drafts", pending_drafts, "to review", COLORS["danger"] if pending_drafts > 0 else COLORS["text_muted"]),
     ]
 
 
