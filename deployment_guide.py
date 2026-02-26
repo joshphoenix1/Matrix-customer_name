@@ -233,18 +233,14 @@ app.layout = html.Div(
                     html.Div(
                         style={
                             "display": "grid",
-                            "gridTemplateColumns": "1fr 1fr 1fr",
+                            "gridTemplateColumns": "1fr 1fr",
                             "gap": "12px",
                             "marginTop": "12px",
                         },
                         children=[
                             html.Div(style={"background": COLORS["code_bg"], "borderRadius": "8px", "padding": "16px", "textAlign": "center"}, children=[
-                                html.Div("~3 min", style={"color": COLORS["accent"], "fontWeight": "800", "fontSize": "1.3rem"}),
+                                html.Div("10–15 min", style={"color": COLORS["accent"], "fontWeight": "800", "fontSize": "1.3rem"}),
                                 html.Div("Deploy time", style={"color": COLORS["text_muted"], "fontSize": "0.78rem"}),
-                            ]),
-                            html.Div(style={"background": COLORS["code_bg"], "borderRadius": "8px", "padding": "16px", "textAlign": "center"}, children=[
-                                html.Div("1 command", style={"color": COLORS["success"], "fontWeight": "800", "fontSize": "1.3rem"}),
-                                html.Div("Fully automated", style={"color": COLORS["text_muted"], "fontSize": "0.78rem"}),
                             ]),
                             html.Div(style={"background": COLORS["code_bg"], "borderRadius": "8px", "padding": "16px", "textAlign": "center"}, children=[
                                 html.Div("HTTPS", style={"color": COLORS["warning"], "fontWeight": "800", "fontSize": "1.3rem"}),
@@ -613,7 +609,7 @@ aws s3 cp /etc/letsencrypt/live/matrixai.app/privkey.pem s3://matrix-ai-certs/wi
 # 5. Set up a cron on your management machine to renew + push to S3 every 60 days
 #    certbot renew && aws s3 cp ... (all instances sync within 24h)'''),
 
-                    html.H5("Per-Customer Deploy (~3 min)", style={"color": COLORS["text_primary"], "marginTop": "16px", "marginBottom": "8px"}),
+                    html.H5("Per-Customer Deploy (10–15 min)", style={"color": COLORS["text_primary"], "marginTop": "16px", "marginBottom": "8px"}),
                     _code('''# 1. Launch EC2 (Ubuntu 22.04/24.04, t3.small, 20GB)
 #    Attach the IAM role. Security group: ports 22, 80, 443
 
