@@ -8,5 +8,3 @@ __pycache__/
 .DS_Store
 matrix.log
 nohup.out
-data/chroma/
-data/*.session

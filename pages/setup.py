@@ -151,42 +151,6 @@ def layout():
                     ),
                 ],
             ),
-            # SMTP Outgoing Email
-            html.Div(
-                style={
-                    "background": COLORS["card_bg"],
-                    "borderRadius": "12px",
-                    "padding": "24px",
-                    "marginBottom": "20px",
-                    "borderLeft": f"4px solid {COLORS['accent']}",
-                },
-                children=[
-                    html.H4(
-                        [
-                            html.I(className="bi bi-send-fill", style={"marginRight": "10px"}),
-                            "SMTP Outgoing Email",
-                        ],
-                        style={"color": COLORS["text_primary"], "marginBottom": "8px"},
-                    ),
-                    html.P(
-                        "Configure SMTP to send emails (drafts, auto-replies). Defaults to your IMAP credentials if left blank. For Gmail, use smtp.gmail.com port 587.",
-                        style={"color": COLORS["text_muted"], "fontSize": "0.85rem", "marginBottom": "16px"},
-                    ),
-                    _input_field("SMTP Server", "setup-smtp-server", "smtp.gmail.com", db.get_setting("smtp_server", "")),
-                    _input_field("SMTP Port", "setup-smtp-port", "587", db.get_setting("smtp_port", "587")),
-                    _input_field("SMTP Email", "setup-smtp-email", "Uses IMAP email if blank", db.get_setting("smtp_email", "")),
-                    _input_field("SMTP Password", "setup-smtp-password", "Uses IMAP password if blank", db.get_setting("smtp_password", ""), input_type="password"),
-                    html.Div(id="setup-smtp-test-result", style={"marginTop": "8px"}),
-                    dbc.Button(
-                        [html.I(className="bi bi-plug", style={"marginRight": "6px"}), "Test SMTP"],
-                        id="setup-test-smtp-btn",
-                        size="sm",
-                        outline=True,
-                        color="primary",
-                        style={"marginTop": "4px"},
-                    ),
-                ],
-            ),
             # Your Info
             html.Div(
                 style={
@@ -269,16 +233,11 @@ def layout():
     State("setup-imap-server", "value"),
     State("setup-imap-email", "value"),
     State("setup-imap-password", "value"),
-    State("setup-smtp-server", "value"),
-    State("setup-smtp-port", "value"),
-    State("setup-smtp-email", "value"),
-    State("setup-smtp-password", "value"),
     State("setup-user-name", "value"),
     State("setup-user-role", "value"),
     prevent_initial_call=True,
 )
-def complete_setup(n_clicks, company_name, industry, imap_server, imap_email, imap_password,
-                   smtp_server, smtp_port, smtp_email, smtp_password, user_name, user_role):
+def complete_setup(n_clicks, company_name, industry, imap_server, imap_email, imap_password, user_name, user_role):
     if not n_clicks:
         return no_update
 
@@ -287,10 +246,6 @@ def complete_setup(n_clicks, company_name, industry, imap_server, imap_email, im
     db.save_setting("imap_server", imap_server or "imap.gmail.com")
     db.save_setting("imap_email", imap_email or "")
     db.save_setting("imap_password", imap_password or "")
-    db.save_setting("smtp_server", smtp_server or "")
-    db.save_setting("smtp_port", smtp_port or "587")
-    db.save_setting("smtp_email", smtp_email or "")
-    db.save_setting("smtp_password", smtp_password or "")
     db.save_setting("user_name", user_name or "")
     db.save_setting("user_role", user_role or "")
 
@@ -320,48 +275,6 @@ def test_imap(n_clicks, server, email, password):
 
     from services.email_ingestion import test_imap_connection
     success, message = test_imap_connection(server, email, password)
-
-    if success:
-        return html.Span(
-            [html.I(className="bi bi-check-circle-fill", style={"marginRight": "6px"}), message],
-            style={"color": COLORS["success"], "fontSize": "0.85rem"},
-        )
-    else:
-        return html.Span(
-            [html.I(className="bi bi-x-circle-fill", style={"marginRight": "6px"}), message],
-            style={"color": COLORS["danger"], "fontSize": "0.85rem"},
-        )
-
-
-@callback(
-    Output("setup-smtp-test-result", "children"),
-    Input("setup-test-smtp-btn", "n_clicks"),
-    State("setup-smtp-server", "value"),
-    State("setup-smtp-port", "value"),
-    State("setup-smtp-email", "value"),
-    State("setup-smtp-password", "value"),
-    State("setup-imap-email", "value"),
-    State("setup-imap-password", "value"),
-    prevent_initial_call=True,
-)
-def test_smtp(n_clicks, server, port, email, password, imap_email, imap_password):
-    if not n_clicks:
-        return no_update
-
-    # Fall back to IMAP creds if SMTP fields are blank
-    smtp_server = server or "smtp.gmail.com"
-    smtp_port = port or "587"
-    smtp_email = email or imap_email
-    smtp_password = password or imap_password
-
-    if not smtp_email or not smtp_password:
-        return html.Span(
-            "Please fill in SMTP credentials or configure IMAP first.",
-            style={"color": COLORS["warning"], "fontSize": "0.85rem"},
-        )
-
-    from services.email_sender import test_smtp_connection
-    success, message = test_smtp_connection(smtp_server, smtp_port, smtp_email, smtp_password)
 
     if success:
         return html.Span(
